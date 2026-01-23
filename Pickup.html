@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
+      .header { background-color: #1C2790; padding: 20px; text-align: center; color: white; }
+      .header h2 { margin: 0; }
+      .container { max-width: 400px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-top: 5px solid #CDAE2C; }
+      .doc-details { background-color: #f9f9f9; border-left: 4px solid #1C2790; padding: 15px; margin-bottom: 20px; }
+      .doc-details p { margin: 5px 0; }
+      .signature-pad-container { position: relative; width: 100%; height: 200px; border: 2px dashed #ccc; border-radius: 4px; margin-bottom: 10px; }
+      canvas { width: 100%; height: 100%; }
+      .button-group { display: flex; gap: 10px; margin-top: 10px; }
+      .button-group button { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+      #clearButton { background-color: #6c757d; color: white; }
+      #saveButton { background-color: #198754; color: white; }
+      #saveButton:disabled { background-color: #cccccc; cursor: not-allowed; }
+      .message { padding: 15px; border-radius: 4px; text-align: center; font-weight: bold; display: none; margin-top: 20px; background-color: #e2e3e5;}
+    </style>
+  </head>
+  <body>
+
+    <div class="header">
+      <h2>Document Pickup Confirmation</h2>
+    </div>
+
+    <div class="container">
+      <div id="mainContent">
+        <div class="doc-details">
+          <p>This confirms the release of the following document:</p>
+          <p><b>Reference #:</b> <span id="refDisplay"><?= referenceNumber ?></span></p>
+          <p><b>Document Title:</b> <?= docDetails.DocumentTitle ?></p>
+        </div>
+
+        <p>Please sign in the box below to acknowledge receipt:</p>
+        <div class="signature-pad-container">
+          <canvas id="signature-pad"></canvas>
+        </div>
+        
+        <div class="button-group">
+          <button id="clearButton">Clear Signature</button>
+          <button id="saveButton">Confirm & Accept</button>
+        </div>
+      </div>
+      
+      <div id="messageBox" class="message"></div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const canvas = document.getElementById('signature-pad');
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        
+        const signaturePad = new SignaturePad(canvas, {
+          backgroundColor: 'rgb(255, 255, 255)'
+        });
+
+        document.getElementById('clearButton').addEventListener('click', function () {
+          signaturePad.clear();
+        });
+
+        document.getElementById('saveButton').addEventListener('click', function () {
+          if (signaturePad.isEmpty()) {
+            return alert("Please provide a signature first.");
+          }
+
+          // --- "FIRE AND FORGET" LOGIC ---
+          // 1. Visually confirm to the user that the process has started.
+          document.getElementById('mainContent').style.display = 'none';
+          const messageBox = document.getElementById('messageBox');
+          messageBox.textContent = 'Processing... The final confirmation will be sent via email. This window will close automatically.';
+          messageBox.style.display = 'block';
+
+          // 2. Prepare the data.
+          const pickupData = {
+            referenceNumber: document.getElementById('refDisplay').textContent,
+            signature: signaturePad.toDataURL('image/png')
+          };
+          
+          // 3. Send the data to the server without a success handler.
+          google.script.run.saveSignature(pickupData);
+
+          // 4. Close the window after a short delay.
+          setTimeout(function() {
+            google.script.host.close();
+          }, 2000); // 2-second delay
+        });
+      });
+    </script>
+
+  </body>
+</html>

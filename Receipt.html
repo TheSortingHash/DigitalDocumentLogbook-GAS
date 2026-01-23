@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+      body { 
+        font-family: 'Roboto', Arial, sans-serif; 
+        margin: 0; 
+        background-color: #f4f4f4; 
+      }
+      .receipt-container {
+        width: 8.5in;
+        height: 5.5in;
+        padding: 0;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        overflow: hidden; 
+        margin: auto; /* Center in view */
+      }
+      .header { 
+        background-color: #1C2790;
+        color: white;
+        display: flex; 
+        align-items: center; 
+        padding: 15px 25px;
+      }
+      .header img { 
+        width: 80px;
+        margin-right: 20px;
+      }
+      .header-text h2 { 
+        margin: 0; 
+        font-size: 1.4em;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+      .header-text p { 
+        margin: 4px 0 0; 
+        font-size: 0.85em;
+        opacity: 0.9;
+      }
+      .content-area {
+        padding: 20px 25px;
+        display: flex;
+        flex-grow: 1;
+        gap: 20px;
+      }
+      .details { 
+        flex-grow: 1; 
+      }
+      .details p {
+        font-size: 1em;
+        margin-top: 0;
+        margin-bottom: 10px;
+      }
+      .qr-code { 
+        text-align: center; 
+        padding-left: 20px;
+        border-left: 1px solid #eee;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 150px;
+      }
+      .qr-code img { 
+        width: 130px; 
+        height: 130px; 
+      }
+      .qr-code p { 
+        font-weight: 500; 
+        font-size: 0.8em; 
+        margin-top: 8px; 
+        color: #555;
+      }
+      
+      /* Main Info Table */
+      .info-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 15px;
+        font-size: 0.95em;
+      }
+      .info-table td {
+        padding: 5px;
+      }
+      .info-label {
+        font-weight: bold;
+        width: 140px;
+        color: #333;
+      }
+      .info-value {
+        color: #1C2790;
+        font-weight: 700;
+      }
+
+      /* Documents List Table */
+      .docs-table { 
+        border-collapse: collapse; 
+        width: 100%; 
+        font-size: 0.85em;
+        margin-top: 10px;
+        border: 1px solid #e0e0e0;
+      }
+      .docs-table th {
+        background-color: #f2f2f2;
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ccc;
+      }
+      .docs-table td { 
+        padding: 8px; 
+        border-bottom: 1px solid #eee; 
+        vertical-align: top;
+      }
+      
+      .footer { 
+        font-size: 0.8em; 
+        color: #666; 
+        text-align: center; 
+        padding: 10px;
+        border-top: 4px solid #CDAE2C;
+        background-color: #f9f9f9;
+      }
+
+      @media print {
+        body { background-color: #fff; }
+        .receipt-container { border: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="receipt-container">
+      <div class="header">
+        <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo">
+        <div class="header-text">
+          <h2>Document Acknowledgement</h2>
+          <p>Office of the Department Manager, Finance Department</p>
+        </div>
+      </div>
+      
+      <div class="content-area">
+        <div class="details">
+          <p>This serves to acknowledge receipt of the following transaction:</p>
+          
+          <table class="info-table">
+            <tr>
+              <td class="info-label">Transaction ID:</td>
+              <td class="info-value" style="font-size: 1.2em;"><?= transactionId ?></td>
+            </tr>
+            <tr>
+              <td class="info-label">Contact Person:</td>
+              <td><?= details.ContactPerson ?></td>
+            </tr>
+            <tr>
+              <td class="info-label">Date Submitted:</td>
+              <td><?= details.Timestamp ?></td>
+            </tr>
+          </table>
+
+          <p style="font-weight:bold; font-size: 0.9em; margin-bottom:5px;">Submitted Documents:</p>
+          <table class="docs-table">
+            <thead>
+              <tr>
+                <th style="width: 25%">Type</th>
+                <th style="width: 45%">Title</th>
+                <th style="width: 30%">Dates (If ALA)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <? for (var i = 0; i < details.documents.length; i++) { ?>
+                <tr>
+                  <td><?= details.documents[i].type ?></td>
+                  <td><?= details.documents[i].title ?></td>
+                  <td><?= details.documents[i].dates ?></td>
+                </tr>
+              <? } ?>
+            </tbody>
+          </table>
+
+        </div>
+        <div class="qr-code">
+          <div id="qrcode"></div>
+          <p>SCAN FOR STATUS</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p style="margin:0;">Please keep this receipt for your reference. This is a system-generated receipt and does not require a signature.</p>
+      </div>
+    </div>
+
+    <script>
+      const fullLink = "<?= appUrl ?>?action=update&id=<?= transactionId ?>";
+      
+      // Generate QR Code
+      const qrContainer = document.getElementById('qrcode');
+      qrContainer.innerHTML = "";
+      new QRCode(qrContainer, { text: fullLink, width: 130, height: 130 });
+
+      // Auto-print
+      window.onload = () => window.print();
+    </script>
+  </body>
+</html>

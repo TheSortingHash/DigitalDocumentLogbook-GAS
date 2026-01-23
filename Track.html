@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
+      /* --- MODIFIED HEADER STYLES --- */
+      .header { background-color: #1C2790; padding: 20px; text-align: center; color: white; }
+      .header img { width: 800px; margin-bottom: 10px; }
+      .header h2 { margin: 0; font-size: 1.8em; }
+      .header p { margin: 5px 0 0; font-size: 1.1em; opacity: 0.9; }
+      /* --- END OF MODIFICATIONS --- */
+      .container { max-width: 600px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-top: 5px solid #CDAE2C; }
+      .form-group { margin-bottom: 20px; }
+      label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+      input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1.1em; }
+      button { width: 100%; padding: 12px; background-color: #1C2790; color: white !important; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+      button:disabled { background-color: #cccccc; cursor: not-allowed; }
+      #resultBox { margin-top: 25px; padding: 20px; border-radius: 4px; display: none; text-align: center; }
+      .status-found { background-color: #e2e3e5; border-left: 5px solid #0d6efd; }
+      .status-error { background-color: #f8d7da; border-left: 5px solid #dc3545; color: #721c24; }
+      #statusText { font-size: 1.2em; font-weight: bold; margin: 0 0 10px 0; }
+      #lastUpdatedText { font-size: 0.9em; color: #6c757d; margin: 0; }
+    </style>
+  </head>
+  <body>
+
+    <div class="header">
+      <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo">
+      <h2>Finance Document Management System</h2>
+      <p>Track your document here</p>
+    </div>
+    <div class="container">
+      <div class="form-group">
+        <label for="refNumberInput">Enter Your Reference Number</label>
+        <input type="text" id="refNumberInput" placeholder="e.g., 2025-08-001">
+      </div>
+      <button id="trackButton">Track Document</button>
+      <div id="resultBox">
+        <p id="statusText"></p>
+        <p id="lastUpdatedText"></p>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const trackButton = document.getElementById('trackButton');
+        const refNumberInput = document.getElementById('refNumberInput');
+        
+        // Allow pressing Enter to submit
+        refNumberInput.addEventListener('keyup', function(event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            trackButton.click();
+          }
+        });
+        
+        trackButton.addEventListener('click', function() {
+          const refNumber = refNumberInput.value.trim();
+          if (!refNumber) {
+            alert("Please enter a reference number.");
+            return;
+          }
+          this.disabled = true;
+          this.textContent = 'Searching...';
+          google.script.run.withSuccessHandler(showResult).getPublicStatus(refNumber);
+        });
+
+        function showResult(result) {
+          const trackButton = document.getElementById('trackButton');
+          const resultBox = document.getElementById('resultBox');
+          const statusText = document.getElementById('statusText');
+          const lastUpdatedText = document.getElementById('lastUpdatedText');
+
+          if (result.error) {
+            statusText.textContent = result.error;
+            lastUpdatedText.textContent = "";
+            resultBox.className = 'status-error';
+          } else {
+            statusText.textContent = `Status: ${result.status}`;
+            lastUpdatedText.textContent = `Last Updated: ${result.lastUpdated}`;
+            resultBox.className = 'status-found';
+          }
+          
+          resultBox.style.display = 'block';
+          trackButton.disabled = false;
+          trackButton.textContent = 'Track Document';
+        }
+      });
+    </script>
+  </body>
+</html>

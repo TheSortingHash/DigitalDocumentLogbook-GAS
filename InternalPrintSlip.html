@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #eee; }
+      
+      /* Identical Print Slip Styles */
+      .slip-container { background: white; padding: 20px; max-width: 105mm; margin: 0 auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+      .slip-content { box-sizing: border-box; padding: 4mm; color: #000; text-align: left; border: 1px solid #000; font-size: 9pt; width: 100%; }
+      .slip-header { border-bottom: 1px solid #ccc; padding-bottom: 2mm; margin-bottom: 2mm; text-align: center; }
+      .slip-body { display: flex; align-items: flex-start; gap: 2mm; } 
+      .meta-table { width: 100%; font-size: 8pt; margin-bottom: 3mm; border-collapse: collapse; }
+      .docs-table { width: 100%; font-size: 7pt; border-collapse: collapse; margin-top: 2mm; border-top: 1px solid #000; }
+      .docs-table td, .docs-table th { padding: 2px; border-bottom: 1px solid #eee; text-align: left; }
+      
+      .print-btn { 
+          display: block; width: 100%; max-width: 200px; margin: 20px auto; 
+          padding: 10px; background: #1C2790; color: white; border: none; 
+          border-radius: 4px; cursor: pointer; font-size: 16px; 
+      }
+
+      @media print {
+        body { background: white; padding: 0; }
+        .slip-container { box-shadow: none; padding: 0; margin: 0; }
+        .print-btn { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    
+    <div class="slip-container">
+      <div class="slip-content">
+        <div class="slip-header"><p style="font-weight:bold; margin:0;">Finance Dept - Internal Log</p></div>
+        <div class="slip-body">
+            <div style="flex-grow: 1;">
+                <? 
+                   // Logic to extract 'Received From' name from the history string of the first doc
+                   let receivedFrom = "";
+                   if (details.documents.length > 0 && details.documents[0].History) {
+                     const match = details.documents[0].History.match(/\[Received from: (.*?)\]/);
+                     if (match) receivedFrom = match[1];
+                   }
+                ?>
+                <table class="meta-table">
+                    <tr><td style="width: 50px;">Log ID:</td><td style="font-size: 12pt; font-weight: bold;"><?= logId ?></td></tr>
+                    <tr><td>Date:</td><td><?= new Date(details.header.Timestamp).toLocaleString() ?></td></tr>
+                    <tr><td>Status:</td><td><b><?= details.documents[0].Status ?></b></td></tr>
+                    
+                    <? if (receivedFrom) { ?>
+                        <tr><td>Rec'd From:</td><td><?= receivedFrom ?></td></tr>
+                    <? } ?>
+                </table>
+
+                <table class="docs-table">
+                  <thead><tr><th>Type</th><th>Title</th></tr></thead>
+                  <tbody>
+                    <? details.documents.forEach(doc => { ?>
+                        <tr><td><?= doc.Type ?></td><td><?= doc.Title ?></td></tr>
+                    <? }) ?>
+                  </tbody>
+                </table>
+            </div>
+            <div style="flex-shrink: 0; text-align: center;">
+                <div id="qrcode"></div>
+                <div style="font-size:6pt;">Scan to Route</div>
+            </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="print-btn" onclick="window.print()">Print Slip</button>
+
+    <script>
+      const updateLink = "<?= appUrl ?>?page=internal-update&id=<?= logId ?>";
+      new QRCode(document.getElementById('qrcode'), { text: updateLink, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L });
+    </script>
+  </body>
+</html>

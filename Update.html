@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
+      .header { background-color: #1C2790; padding: 15px; text-align: center; color: white; }
+      .header img { width: 300px; max-width: 100%; margin-bottom: 5px; }
+      .header h2 { margin: 0; font-size: 1.4em; }
+      .container { max-width: 1000px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+      .transaction-details { background-color: #f8f9fa; border-left: 5px solid #1C2790; padding: 15px; margin-bottom: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .transaction-details p { margin: 2px 0; font-size: 14px; }
+      .batch-actions { background-color: #e3f2fd; border: 1px solid #90caf9; padding: 15px; border-radius: 6px; margin-bottom: 25px; }
+      .batch-header { font-weight: bold; color: #0d47a1; margin-bottom: 10px; display: block; font-size: 1.1em;}
+      .batch-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .document-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      .document-table th, .document-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
+      .document-table th { background-color: #e9ecef; font-size: 13px; font-weight: bold; }
+      .status-badge { padding: 4px 8px; border-radius: 12px; color: white; font-weight: bold; font-size: 11px; text-align: center; display: inline-block; }
+      .owner-name { font-weight: bold; color: #333; }
+      .liaison-label { color: #888; font-style: italic; font-size: 13px; }
+      .btn-action { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; color: white; margin-right: 4px; white-space: nowrap; }
+      .btn-update { background-color: #0067c7; }
+      .btn-release { background-color: #198754; }
+      .btn-pullout { background-color: #dc3545; }
+      .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+      .modal-content { background-color: #fff; margin: 10% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; position: relative; }
+      .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
+      .modal h3 { margin-top: 0; color: #1C2790; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+      .form-group { margin-bottom: 15px; position: relative; } 
+      label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+      select, textarea, input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+      .signature-pad-container { width: 100%; height: 180px; border: 2px dashed #ccc; margin-bottom: 10px; }
+      canvas { width: 100%; height: 100%; }
+      .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+      .btn-confirm { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; }
+      .btn-clear { background-color: #6c757d; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; color: white; }
+      .message { padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; display: none; margin-top: 15px; }
+      .success { background-color: #d4edda; color: #155724; }
+      
+      /* Autocomplete Styles */
+      .autocomplete-items { position: absolute; border: 1px solid #d4d4d4; border-bottom: none; border-top: none; z-index: 99; top: 100%; left: 0; right: 0; max-height: 150px; overflow-y: auto; background-color: #fff; }
+      .autocomplete-items div { padding: 10px; cursor: pointer; background-color: #fff; border-bottom: 1px solid #d4d4d4; }
+      .autocomplete-items div:hover { background-color: #e9e9e9; }
+    </style>
+  </head>
+  <body>
+
+    <div class="header">
+      <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo">
+      <h2>Finance Department - Office of the Department Manager</h2>
+    </div>
+
+    <div class="container">
+      <div id="messageBox" class="message"></div>
+      <div class="transaction-details">
+        <div><p><b>Transaction ID:</b> <span id="dispTxId"></span></p><p><b>Liaison / Contact:</b> <span id="dispContact"></span></p></div>
+        <div><p><b>Department:</b> <span id="dispDept"></span></p><p><b>Date Submitted:</b> <span id="dispDate"></span></p></div>
+      </div>
+      <div class="batch-actions">
+        <span class="batch-header">Batch Actions (Apply to All Active Documents)</span>
+        <div class="batch-controls">
+            <div style="flex-grow:1; display:flex; gap:5px;">
+                <select id="batchStatus" style="flex-grow:1;">
+                    <option value="" disabled selected>Select Status for All...</option>
+                    <option value="Pending Signature">Pending Signature</option>
+                    <option value="Signed">Signed (Ready for Pickup)</option>
+                    <option value="For pick up, but with comments">For pick up, but with comments</option>
+                </select>
+                <button class="btn-confirm" style="background-color: #0d47a1;" onclick="openBatchUpdateModal()">Update All</button>
+            </div>
+            <div style="display:flex; gap:5px; border-left: 1px solid #aaa; padding-left: 10px;">
+                <button class="btn-confirm" style="background-color: #198754;" onclick="openBatchReleaseModal()">Release All</button>
+                <button class="btn-confirm" style="background-color: #dc3545;" onclick="openBatchPullOutModal()">Pull Out All</button>
+            </div>
+        </div>
+      </div>
+      <h3>Documents in this Transaction</h3>
+      <table class="document-table">
+        <thead><tr><th>Document Owner</th> <th>Document Title</th><th>Type</th><th>Current Status</th><th>Actions</th></tr></thead>
+        <tbody id="docTableBody"></tbody>
+      </table>
+    </div>
+
+    <div id="updateModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('updateModal')">&times;</span>
+            <h3 id="updateModalTitle">Update Status</h3>
+            <input type="hidden" id="updateDocRow"> <input type="hidden" id="isBatchUpdate"> 
+            <div class="form-group">
+                <label>New Status</label>
+                <select id="newStatus">
+                    <option value="Pending Signature">Pending Signature</option>
+                    <option value="Signed">Signed (Ready for Pickup)</option>
+                    <option value="For pick up, but with comments">For pick up, but with comments</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Remarks / Notes</label><textarea id="updateNotes" rows="3"></textarea></div>
+            <div class="modal-actions"><button class="btn-confirm" style="background-color: #0067c7;" onclick="submitUpdate()">Save Update</button></div>
+        </div>
+    </div>
+    
+    <div id="releaseModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('releaseModal')">&times;</span>
+            <h3 id="releaseModalTitle">Release Document</h3>
+            <input type="hidden" id="releaseDocRow">
+            
+            <div class="form-group">
+                <label>Claimed By (Name)</label>
+                <input type="text" id="claimedBy" placeholder="Start typing name..." autocomplete="off">
+                <div class="autocomplete-items"></div>
+            </div>
+
+            <p>Sign below to acknowledge receipt:</p>
+            <div class="signature-pad-container"><canvas id="release-sig-pad"></canvas></div>
+            <div class="modal-actions"><button class="btn-clear" onclick="clearPad('release')">Clear</button><button class="btn-confirm" style="background-color: #198754;" onclick="submitRelease()">Confirm Release</button></div>
+        </div>
+    </div>
+    
+    <div id="pullOutModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('pullOutModal')">&times;</span>
+            <h3 id="pullOutModalTitle">Pull Out Document</h3>
+            <input type="hidden" id="pullOutDocRow">
+            
+            <div class="form-group">
+                <label>Pulled Out By (Name)</label>
+                <input type="text" id="pulledOutBy" placeholder="Start typing name..." autocomplete="off">
+                <div class="autocomplete-items"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Reason for Pull Out (Required)</label>
+                <textarea id="pullOutComments" rows="2"></textarea>
+            </div>
+            
+            <p>Sign below to confirm:</p>
+            <div class="signature-pad-container"><canvas id="pullout-sig-pad"></canvas></div>
+            
+            <div class="modal-actions"><button class="btn-clear" onclick="clearPad('pullout')">Clear</button><button class="btn-confirm" style="background-color: #dc3545;" onclick="submitPullOut()">Confirm Pull Out</button></div>
+        </div>
+    </div>
+
+    <script>
+      const transactionId = "<?= transactionId ?>";
+      const details = <?!= JSON.stringify(details) ?>; 
+      const directory = <?!= JSON.stringify(directory) ?>;
+      
+      const contactPerson = details.ContactPerson;
+      const contactEmail = details.ContactEmail;
+      
+      let releaseSigPad, pullOutSigPad;
+
+      window.onload = function() {
+          document.getElementById('dispTxId').innerText = transactionId;
+          document.getElementById('dispContact').innerText = details.ContactPerson;
+          document.getElementById('dispDept').innerText = details.CenterDept;
+          document.getElementById('dispDate').innerText = new Date(details.SubmissionTimestamp).toLocaleString();
+          renderTable();
+          
+          // Attach Autocomplete to both ClaimedBy and PulledOutBy
+          attachAutocomplete(document.getElementById('claimedBy'));
+          attachAutocomplete(document.getElementById('pulledOutBy'));
+      };
+
+      function renderTable() {
+          const tbody = document.getElementById('docTableBody');
+          tbody.innerHTML = "";
+          
+          details.documents.forEach(doc => {
+               let statusColor = '#6c757d';
+               if (doc.Status === 'Pending Signature') statusColor = '#ffc107';
+               if (doc.Status === 'Signed') statusColor = '#198754';
+               if (doc.Status === 'Claimed/Released' || doc.Status === 'Pulled Out') statusColor = '#0d6efd';
+               if (doc.Status === 'For pick up, but with comments') statusColor = '#fd7e14';
+
+               let ownerDisplay = (doc.PrincipalName && doc.PrincipalName.trim() !== "") ? 
+                   `<span class="owner-name">${doc.PrincipalName}</span>` : `<span class="liaison-label">(Liaison)</span>`;
+
+               const tr = document.createElement('tr');
+               let actionButtons = '';
+
+               actionButtons += `<button class="btn-action btn-update" onclick="openUpdateModal('${doc.rowNumber}', '${doc.DocumentTitle}')">Update</button>`;
+               
+               if (doc.Status !== 'Claimed/Released' && doc.Status !== 'Pulled Out') {
+                   actionButtons += `<button class="btn-action btn-pullout" onclick="openPullOutModal('${doc.rowNumber}', '${doc.DocumentTitle}')">Pull Out</button>`;
+                   if (doc.Status === 'Signed' || doc.Status === 'For pick up, but with comments') {
+                       actionButtons += `<button class="btn-action btn-release" onclick="openReleaseModal('${doc.rowNumber}', '${doc.DocumentTitle}')">Release</button>`;
+                   }
+               } else {
+                   actionButtons += '<span style="color:#aaa; font-size:11px; margin-left:5px;">(Closed)</span>';
+               }
+
+               tr.innerHTML = `<td>${ownerDisplay}</td><td>${doc.DocumentTitle}</td><td>${doc.DocumentType}</td><td><span class="status-badge" style="background-color: ${statusColor};">${doc.Status}</span></td><td>${actionButtons}</td>`;
+               tbody.appendChild(tr);
+          });
+      }
+
+      function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+      function clearPad(type) { if(type === 'release') releaseSigPad.clear(); if(type === 'pullout') pullOutSigPad.clear(); }
+
+      function openUpdateModal(row, title) { 
+          document.getElementById('updateDocRow').value = row; 
+          document.getElementById('isBatchUpdate').value = "false";
+          document.getElementById('updateModalTitle').innerText = "Update: " + title; 
+          document.getElementById('updateModal').style.display = 'block'; 
+      }
+      function openReleaseModal(row, title) { 
+          document.getElementById('releaseDocRow').value = row; 
+          document.getElementById('releaseModalTitle').innerText = "Release: " + title; 
+          document.getElementById('releaseModal').style.display = 'block'; 
+          if(!releaseSigPad) { const c = document.getElementById('release-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; releaseSigPad = new SignaturePad(c); } releaseSigPad.clear(); 
+          document.getElementById('claimedBy').value = ""; 
+      }
+      function openPullOutModal(row, title) { 
+          document.getElementById('pullOutDocRow').value = row; 
+          document.getElementById('pullOutModalTitle').innerText = "Pull Out: " + title; 
+          document.getElementById('pullOutModal').style.display = 'block'; 
+          if(!pullOutSigPad) { const c = document.getElementById('pullout-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; pullOutSigPad = new SignaturePad(c); } pullOutSigPad.clear(); 
+          document.getElementById('pulledOutBy').value = ""; // Reset Name
+          document.getElementById('pullOutComments').value = "";
+      }
+      function openBatchUpdateModal() {
+          const batchStatus = document.getElementById('batchStatus').value;
+          if(!batchStatus) return alert("Please select a status first.");
+          document.getElementById('newStatus').value = batchStatus;
+          document.getElementById('updateDocRow').value = ""; 
+          document.getElementById('isBatchUpdate').value = "true";
+          document.getElementById('updateModalTitle').innerText = "Batch Update (All Documents)";
+          document.getElementById('updateModal').style.display = 'block';
+      }
+      function openBatchReleaseModal() {
+          document.getElementById('releaseDocRow').value = ""; 
+          document.getElementById('releaseModalTitle').innerText = "Batch Release (All Signed Documents)";
+          document.getElementById('releaseModal').style.display = 'block';
+          if(!releaseSigPad) { const c = document.getElementById('release-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; releaseSigPad = new SignaturePad(c); } releaseSigPad.clear(); 
+          document.getElementById('claimedBy').value = "";
+      }
+      function openBatchPullOutModal() {
+          document.getElementById('pullOutDocRow').value = ""; 
+          document.getElementById('pullOutModalTitle').innerText = "Batch Pull Out (All Active Documents)";
+          document.getElementById('pullOutModal').style.display = 'block';
+          if(!pullOutSigPad) { const c = document.getElementById('pullout-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; pullOutSigPad = new SignaturePad(c); } pullOutSigPad.clear(); 
+          document.getElementById('pulledOutBy').value = "";
+          document.getElementById('pullOutComments').value = "";
+      }
+
+      function submitUpdate() { 
+          const btn = event.target; btn.disabled = true; btn.innerText = "Saving..."; 
+          const isBatch = document.getElementById('isBatchUpdate').value === "true";
+          const data = { transactionId: transactionId, documentRow: document.getElementById('updateDocRow').value, newStatus: document.getElementById('newStatus').value, notes: document.getElementById('updateNotes').value, isBatch: isBatch }; 
+          google.script.run.withSuccessHandler(onSuccess).updateDocumentStatus(data); 
+      }
+
+      function submitRelease() { 
+          if(releaseSigPad.isEmpty()) return alert("Signature required."); 
+          const claimedBy = document.getElementById('claimedBy').value;
+          if(!claimedBy) return alert("Please enter who claimed the document.");
+
+          const btn = event.target; btn.disabled = true; btn.innerText = "Processing..."; 
+          const row = document.getElementById('releaseDocRow').value; 
+          const isBatch = row === ""; 
+
+          const data = { 
+              transactionId: transactionId, 
+              documentRow: row, 
+              isBatch: isBatch,
+              signature: releaseSigPad.toDataURL(), 
+              claimedBy: claimedBy, // Passed Name
+              contactPerson: contactPerson, 
+              contactEmail: contactEmail 
+          }; 
+          google.script.run.withSuccessHandler(onSuccess).processClaim(data);
+      }
+
+      function submitPullOut() { 
+          const comments = document.getElementById('pullOutComments').value; 
+          const pulledOutBy = document.getElementById('pulledOutBy').value;
+
+          if(!pulledOutBy) return alert("Please enter who is pulling out the document.");
+          if(!comments) return alert("Reason required."); 
+          if(pullOutSigPad.isEmpty()) return alert("Signature required."); 
+          
+          const btn = event.target; btn.disabled = true; btn.innerText = "Processing..."; 
+          
+          const row = document.getElementById('pullOutDocRow').value;
+          const isBatch = row === "";
+
+          const data = { 
+              transactionId: transactionId, 
+              documentRow: row, 
+              isBatch: isBatch,
+              signature: pullOutSigPad.toDataURL(), 
+              comments: comments, 
+              pulledOutBy: pulledOutBy, // NEW: Passed Name
+              contactPerson: contactPerson, 
+              contactEmail: contactEmail 
+          }; 
+          google.script.run.withSuccessHandler(onSuccess).processPullOut(data); 
+      }
+
+      function onSuccess(msg) { 
+          const msgBox = document.getElementById('messageBox'); 
+          msgBox.innerText = msg; msgBox.className = 'message success'; 
+          msgBox.style.display = 'block'; 
+          document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); 
+          setTimeout(() => location.reload(), 1500); 
+      }
+
+      // Autocomplete Function (Standardized)
+      function attachAutocomplete(inp) {
+        const listContainer = inp.parentNode.querySelector('.autocomplete-items');
+        inp.addEventListener("input", function(e) {
+            const val = this.value;
+            listContainer.innerHTML = '';
+            if (!val) return false;
+            const matches = directory.filter(d => d.name.toLowerCase().includes(val.toLowerCase()));
+            matches.slice(0, 8).forEach(match => { 
+                const item = document.createElement("div");
+                const regex = new RegExp(`(${val})`, "gi");
+                const highlightedName = match.name.replace(regex, "<strong>$1</strong>");
+                item.innerHTML = `${highlightedName} <span style='font-size:11px;color:#888;'>(${match.email})</span>`;
+                item.addEventListener("click", function(e) {
+                    inp.value = match.name;
+                    listContainer.innerHTML = '';
+                });
+                listContainer.appendChild(item);
+            });
+        });
+        document.addEventListener("click", function (e) { if (e.target !== inp) { listContainer.innerHTML = ''; } });
+      }
+    </script>
+  </body>
+</html>

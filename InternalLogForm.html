@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+      /* --- Base Styles --- */
+      body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
+      .header { background-color: #1C2790; padding: 20px; text-align: center; color: white; }
+      .header img { width: 300px; margin-bottom: 10px; }
+      .container { max-width: 700px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-top: 5px solid #1C2790; }
+      
+      .form-group { margin-bottom: 20px; position: relative; } /* Relative for autocomplete */
+      .form-section-title { font-size: 1.2em; font-weight: bold; color: #1C2790; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; margin-top: 30px; }
+      label { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
+      input[type="text"], select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+      
+      button { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+      #submitButton { width: 100%; margin-top: 20px; background-color: #1C2790; color: white; }
+      #add-doc-btn { width: 100%; background-color: #28a745; color: white; margin-top: 10px; }
+      
+      .document-entry { background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; margin-bottom: 15px; position: relative; }
+      .remove-btn { position: absolute; top: 10px; right: 10px; background-color: #dc3545; color: white; width: 30px; height: 30px; line-height: 30px; text-align: center; }
+
+      /* Autocomplete */
+      .autocomplete-items { position: absolute; border: 1px solid #d4d4d4; background: #fff; z-index: 99; width: 100%; left:0; right:0; max-height:200px; overflow-y:auto; }
+      .autocomplete-items div { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+      .autocomplete-items div:hover { background-color: #e9e9e9; }
+
+      /* --- Print Slip Styles --- */
+      .slip-content { box-sizing: border-box; padding: 4mm; color: #000; text-align: left; border: 1px solid #000; font-size: 9pt; width: 105mm; }
+      .slip-header { border-bottom: 1px solid #ccc; padding-bottom: 2mm; margin-bottom: 2mm; text-align: center; }
+      .slip-body { display: flex; align-items: flex-start; gap: 2mm; } 
+      .meta-table { width: 100%; font-size: 8pt; margin-bottom: 3mm; border-collapse: collapse; }
+      .docs-table { width: 100%; font-size: 7pt; border-collapse: collapse; margin-top: 2mm; border-top: 1px solid #000; }
+      .docs-table td, .docs-table th { padding: 2px; border-bottom: 1px solid #eee; text-align: left; }
+      
+      @media print {
+        .header, #formContainer, .no-print { display: none !important; }
+        #successContainer { display: flex !important; justify-content: center; padding-top: 5mm; border: none; box-shadow: none; margin: 0; max-width: 100%; }
+        .slip-content { width: 100%; border: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo">
+      <h2>Internal Document Logger</h2>
+    </div>
+
+    <div class="container" id="formContainer">
+      <form id="logForm"> 
+        <div class="form-group">
+            <label>Encoder Name (Optional)</label>
+            <input type="text" id="encoderName" placeholder="Enter your name...">
+        </div>
+
+        <div class="form-group">
+            <label>Received From (Optional - Sends Acknowledgment Email)</label>
+            <input type="text" id="receivedFrom" placeholder="Search name..." autocomplete="off">
+            <div class="autocomplete-items"></div>
+        </div>
+
+        <div class="form-section-title">Documents to Log</div>
+        <div id="documents-container"></div>
+
+        <button type="button" id="add-doc-btn">+ Add Another Document</button>
+        <button type="submit" id="submitButton">Log Documents & Print Slip</button>
+      </form>
+    </div>
+
+    <div class="container" id="successContainer" style="display: none;">
+      <div class="slip-content">
+        <div class="slip-header"><p style="font-weight:bold; margin:0;">Finance Dept - Internal Log</p></div>
+        <div class="slip-body">
+            <div style="flex-grow: 1;">
+                <table class="meta-table">
+                    <tbody>
+                        <tr><td style="width: 50px;">Log ID:</td><td style="font-size: 12pt; font-weight: bold;" id="slipLogId"></td></tr>
+                        <tr><td>Date:</td><td id="slipTimestamp"></td></tr>
+                        <tr><td>Status:</td><td><b>Finance Custody</b></td></tr>
+                        </tbody>
+                </table>
+                <table class="docs-table">
+                  <thead><tr><th>Type</th><th>Title</th></tr></thead>
+                  <tbody id="slip-documents-list"></tbody>
+                </table>
+            </div>
+            <div style="flex-shrink: 0; text-align: center;">
+                <div id="qrcode"></div>
+                <div style="font-size:6pt;">Scan to Route</div>
+            </div>
+        </div>
+      </div>
+      <button class="no-print" onclick="location.reload()" style="margin-top:20px; background:#6c757d; color:white; width:100%;">Log Another Batch</button>
+    </div>
+
+    <script>
+      const docTypes = <?!= JSON.stringify(docTypes) ?>;
+      let directory = [];
+
+      function createDocEntryHTML() {
+        let options = `<option value="" disabled selected>Select type...</option>`;
+        docTypes.forEach(t => options += `<option value="${t}">${t}</option>`);
+        return `
+          <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+          <div class="form-group">
+            <label>Document Type</label>
+            <select class="doc-type-select" required>${options}</select>
+          </div>
+          <div class="form-group">
+            <label>Document Title</label>
+            <input type="text" class="doc-title-input" required>
+          </div>
+        `;
+      }
+
+      function addDocumentEntry() {
+        const div = document.createElement('div');
+        div.className = 'document-entry';
+        div.innerHTML = createDocEntryHTML();
+        document.getElementById('documents-container').appendChild(div);
+      }
+
+      function attachAutocomplete(inp) {
+        const list = inp.parentNode.querySelector('.autocomplete-items');
+        inp.addEventListener("input", function() {
+           const val = this.value; list.innerHTML = '';
+           if(!val) return;
+           directory.filter(d => d.name.toLowerCase().includes(val.toLowerCase())).slice(0,5).forEach(m => {
+               let div = document.createElement("div");
+               div.innerHTML = m.name;
+               div.onclick = function() { inp.value = m.name; list.innerHTML = ''; };
+               list.appendChild(div);
+           });
+        });
+        document.addEventListener("click", e => { if(e.target !== inp) list.innerHTML = ''; });
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        google.script.run.withSuccessHandler(data => { directory = data; }).getDirectory();
+        
+        attachAutocomplete(document.getElementById('receivedFrom'));
+        addDocumentEntry(); 
+        document.getElementById('add-doc-btn').addEventListener('click', addDocumentEntry);
+        
+        document.getElementById('logForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          const btn = document.getElementById('submitButton');
+          btn.disabled = true; btn.textContent = 'Processing...';
+
+          const docs = [];
+          document.querySelectorAll('.document-entry').forEach(entry => {
+            docs.push({
+              docType: entry.querySelector('.doc-type-select').value,
+              docTitle: entry.querySelector('.doc-title-input').value
+            });
+          });
+
+          const formData = {
+             encoder: document.getElementById('encoderName').value,
+             receivedFrom: document.getElementById('receivedFrom').value,
+             documents: docs
+          };
+
+          // PASS THE NAME TO SUCCESS HANDLER
+          google.script.run.withSuccessHandler((res) => onSuccess(res, formData.receivedFrom))
+                           .processInternalLog(formData);
+        });
+      });
+
+      function onSuccess(res, receivedFrom) {
+        document.getElementById('slipLogId').textContent = res.logID;
+        document.getElementById('slipTimestamp').textContent = res.timestamp;
+        
+        // --- NEW: Inject Received From Row if present ---
+        const metaTableBody = document.querySelector('.meta-table tbody');
+        if (receivedFrom && receivedFrom.trim() !== "") {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>Rec'd From:</td><td>${receivedFrom}</td>`;
+            metaTableBody.appendChild(row);
+        }
+        // ------------------------------------------------
+
+        const tbody = document.getElementById('slip-documents-list');
+        tbody.innerHTML = "";
+        res.documents.forEach(d => {
+            tbody.innerHTML += `<tr><td>${d.docType}</td><td>${d.docTitle}</td></tr>`;
+        });
+
+        const updateLink = `${res.appUrl}?page=internal-update&id=${res.logID}`;
+        document.getElementById('qrcode').innerHTML = "";
+        new QRCode(document.getElementById('qrcode'), { text: updateLink, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L });
+
+        document.getElementById('formContainer').style.display = 'none';
+        document.getElementById('successContainer').style.display = 'block';
+        setTimeout(() => window.print(), 500);
+      }
+    </script>
+  </body>
+</html>

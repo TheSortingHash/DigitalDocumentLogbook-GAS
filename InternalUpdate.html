@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <style>
+      /* --- Styles from Update.html --- */
+      body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
+      .header { background-color: #1C2790; padding: 15px; text-align: center; color: white; }
+      .container { max-width: 1000px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+      .transaction-details { background-color: #f8f9fa; border-left: 5px solid #1C2790; padding: 15px; margin-bottom: 25px; }
+      .batch-actions { background-color: #e3f2fd; border: 1px solid #90caf9; padding: 15px; border-radius: 6px; margin-bottom: 25px; }
+      .document-table { width: 100%; border-collapse: collapse; }
+      .document-table th, .document-table td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+      .status-badge { padding: 4px 8px; border-radius: 12px; color: white; font-weight: bold; font-size: 11px; }
+      
+      .btn-confirm { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; background-color: #0d47a1; }
+      .btn-return { background-color: #e67e22; color:white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; margin-left:10px; }
+      
+      .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+      .modal-content { background-color: #fff; margin: 10% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; }
+      .signature-pad-container { width: 100%; height: 180px; border: 2px dashed #ccc; margin-bottom: 10px; }
+      canvas { width: 100%; height: 100%; }
+
+      /* Autocomplete */
+      .autocomplete-items { position: absolute; border: 1px solid #d4d4d4; background: #fff; z-index: 99; width: 100%; }
+      .autocomplete-items div { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+      .autocomplete-items div:hover { background-color: #e9e9e9; }
+      .form-group { position: relative; margin-bottom: 15px; }
+      input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <img src="https://i.imgur.com/jaEbfAR.png" width="300" alt="DAP Logo">
+      <h2>Internal Document Update</h2>
+    </div>
+
+    <div class="container">
+      <div class="transaction-details">
+        <h3>Log ID: <span id="dispLogId"></span></h3>
+        <p><b>Date Logged:</b> <span id="dispDate"></span></p>
+        <p><b>Encoder:</b> <span id="dispEncoder"></span></p>
+      </div>
+
+      <div class="batch-actions">
+        <b>Batch Action:</b>
+        <button class="btn-confirm" onclick="openHandoverModal('BATCH', false)">Pass / Route All</button>
+        <button class="btn-return" onclick="openHandoverModal('BATCH', true)">Return to Finance All</button>
+      </div>
+
+      <table class="document-table">
+        <thead><tr><th>Title</th><th>Type</th><th>Current Status</th><th>Custody</th><th>Action</th></tr></thead>
+        <tbody id="docTableBody"></tbody>
+      </table>
+    </div>
+
+    <div id="handoverModal" class="modal">
+      <div class="modal-content">
+        <span onclick="document.getElementById('handoverModal').style.display='none'" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+        <h3 id="modalTitle">Pass Custody</h3>
+        <input type="hidden" id="targetRows"> 
+        
+        <div class="form-group" id="recipientGroup">
+            <label>Pass to (Recipient Name)</label>
+            <input type="text" id="recipientName" placeholder="Search name..." autocomplete="off">
+            <div class="autocomplete-items"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Remarks</label>
+            <textarea id="remarks" rows="2"></textarea>
+        </div>
+
+        <div id="sigSection">
+            <p>Recipient Signature:</p>
+            <div class="signature-pad-container"><canvas id="sig-pad"></canvas></div>
+            <button onclick="sigPad.clear()" style="padding:10px; margin-right:5px;">Clear</button>
+        </div>
+        
+        <div style="text-align:right; margin-top:10px;">
+            <button class="btn-confirm" onclick="submitHandover()">Confirm Transfer</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const logId = "<?= logId ?>";
+      const details = <?!= JSON.stringify(details) ?>; 
+      const directory = <?!= JSON.stringify(directory) ?>;
+      let sigPad;
+      let isReturnMode = false;
+
+      window.onload = function() {
+         if(!details) return document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px;'>Log ID Not Found</h2>";
+         
+         document.getElementById('dispLogId').innerText = details.header.LogID;
+         document.getElementById('dispDate').innerText = new Date(details.header.Timestamp).toLocaleString();
+         document.getElementById('dispEncoder').innerText = details.header.Encoder;
+         
+         renderTable();
+         
+         const canvas = document.getElementById('sig-pad');
+         function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+         window.onresize = resizeCanvas; resizeCanvas();
+         sigPad = new SignaturePad(canvas);
+
+         attachAutocomplete(document.getElementById('recipientName'));
+      };
+
+      function renderTable() {
+         const tbody = document.getElementById('docTableBody');
+         tbody.innerHTML = "";
+         details.documents.forEach(doc => {
+             let statusColor = doc.Status === 'Finance Custody' ? '#1C2790' : '#198754';
+             let custodyDisplay = doc.CurrentCustody === 'Finance' ? '<b>Finance</b>' : `<span style="color:#198754">${doc.CurrentCustody}</span>`;
+             
+             let btn = `<button onclick="openHandoverModal('[${doc.rowNumber}]', false)" style="cursor:pointer; padding:5px;">Pass</button>
+                        <button onclick="openHandoverModal('[${doc.rowNumber}]', true)" style="cursor:pointer; padding:5px; margin-left:3px; font-size:10px;">Return</button>`;
+
+             tbody.innerHTML += `
+               <tr>
+                 <td>${doc.Title}</td>
+                 <td>${doc.Type}</td>
+                 <td><span class="status-badge" style="background-color:${statusColor}">${doc.Status}</span></td>
+                 <td>${custodyDisplay}</td>
+                 <td>${btn}</td>
+               </tr>`;
+         });
+      }
+
+      function openHandoverModal(rowsJson, isReturn) {
+         isReturnMode = isReturn;
+         
+         if(rowsJson === 'BATCH') {
+             const allRows = details.documents.map(d => d.rowNumber);
+             document.getElementById('targetRows').value = JSON.stringify(allRows);
+         } else {
+             document.getElementById('targetRows').value = rowsJson;
+         }
+         
+         document.getElementById('modalTitle').innerText = isReturn ? "Return to Finance" : "Pass Custody";
+         
+         // Toggle Fields
+         if(isReturn) {
+             document.getElementById('recipientGroup').style.display = 'none';
+             document.getElementById('sigSection').style.display = 'none';
+             document.getElementById('recipientName').value = "Finance"; // Fixed Value
+         } else {
+             document.getElementById('recipientGroup').style.display = 'block';
+             document.getElementById('sigSection').style.display = 'block';
+             sigPad.clear();
+             document.getElementById('recipientName').value = "";
+         }
+
+         document.getElementById('handoverModal').style.display = 'block';
+      }
+
+      function submitHandover() {
+         const name = document.getElementById('recipientName').value;
+         
+         if(!isReturnMode) {
+             if(sigPad.isEmpty()) return alert("Signature required.");
+             if(!name) return alert("Recipient name required.");
+         }
+
+         const btn = event.target; btn.disabled = true; btn.innerText = "Processing...";
+
+         const data = {
+             logID: logId,
+             docRows: JSON.parse(document.getElementById('targetRows').value),
+             recipientName: name,
+             remarks: document.getElementById('remarks').value,
+             signature: isReturnMode ? "" : sigPad.toDataURL()
+         };
+
+         google.script.run.withSuccessHandler(() => {
+             alert("Custody Updated!");
+             location.reload();
+         }).processInternalHandover(data);
+      }
+
+      function attachAutocomplete(inp) {
+        const list = inp.parentNode.querySelector('.autocomplete-items');
+        inp.addEventListener("input", function() {
+           const val = this.value; list.innerHTML = '';
+           if(!val) return;
+           directory.filter(d => d.name.toLowerCase().includes(val.toLowerCase())).slice(0,5).forEach(m => {
+               let div = document.createElement("div");
+               div.innerHTML = m.name;
+               div.onclick = function() { inp.value = m.name; list.innerHTML = ''; };
+               list.appendChild(div);
+           });
+        });
+        document.addEventListener("click", e => { if(e.target !== inp) list.innerHTML = ''; });
+      }
+    </script>
+  </body>
+</html>
