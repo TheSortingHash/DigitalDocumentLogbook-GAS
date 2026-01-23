@@ -78,7 +78,7 @@ Create a new Google Sheet. This will serve as your database. You must create the
 2. Go to **Extensions** > **Apps Script**.
 3. Copy and paste the files from this repository into the script editor:
    * `Code.gs` (Server-side logic)
-   * `InternalLogging.js` (Internal logic)
+   * `InternalLogging.gs` (Internal logic)
    * `Dashboard.html`, `Index.html`, `Update.html`, `InternalLogForm.html`, `InternalUpdate.html`, `Track.html`, `Receipt.html`, `PrintSlip.html`, `InternalPrintSlip.html`, `Pickup.html`, `pull-out.html` (Client-side views).
 4. **Important:** Ensure all filenames match exactly as they appear in the repo.
 
@@ -113,7 +113,7 @@ This system can be tailored for other DAP offices or departments. Here is what t
 
 ### 3. Customizing Email Templates
 
-* **Files:** `Code.gs` and `InternalLogging.js`.
+* **Files:** `Code.gs` and `InternalLogging.gs`.
 * **Functions:** Look for functions starting with `send...` (e.g., `sendLiaisonReceiptEmail`, `sendRoutedEmail`).
 * **Action:** You can edit the HTML strings within these functions to change the email wording, color scheme (currently DAP Blue `#1C2790`), or layout.
 
