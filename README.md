@@ -47,7 +47,7 @@ By digitizing these flows with **QR Codes, Digital Initials, and Automated Email
 
 ### Prerequisites
 
-* A Google Workspace Account (DAP domain recommended).
+* A Dedicated Google Workspace Account (DAP domain [@dap.edu.ph]).
 * Access to Google Drive and Google Sheets.
 
 ### Step 1: Database Setup (Google Sheets)
