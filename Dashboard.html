@@ -6,13 +6,13 @@
     <style>
         body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
         .header { background-color: #1C2790; padding: 20px; text-align: center; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header img { width: 800px; margin-bottom: 10px; }
+        .header img { width: 300px; margin-bottom: 10px; } /* Adjusted width for better fit */
         .header h2 { margin: 0; }
         .container { max-width: 1200px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         
         /* Actions & Navigation */
         .main-actions-container { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-        .tab-nav { border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+        .tab-nav { border-bottom: 2px solid #ccc; margin-bottom: 20px; display: flex; gap: 10px; }
         .tab-button { background-color: transparent; border: none; padding: 10px 15px; font-size: 16px; cursor: pointer; border-bottom: 3px solid transparent; }
         .tab-button.active { font-weight: bold; color: #1C2790; border-bottom: 3px solid #1C2790; }
         
@@ -48,6 +48,16 @@
         .status { padding: 4px 8px; border-radius: 12px; color: white; font-weight: bold; font-size: 11px; text-align: center; display: inline-block; }
         .loader { text-align: center; padding: 50px; font-size: 18px; color: #555; }
 
+        /* --- NEW: Directory Upload Styles --- */
+        #directory-container { display: none; padding: 20px; border: 2px dashed #ccc; border-radius: 8px; text-align: center; background-color: #fafafa; }
+        .upload-box { max-width: 500px; margin: 0 auto; }
+        .file-input { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; background: white; width: 100%; }
+        .upload-btn { background-color: #28a745; color: white; padding: 12px 24px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        .upload-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .upload-status { margin-top: 20px; font-weight: bold; }
+        .success-msg { color: #198754; }
+        .error-msg { color: #dc3545; }
+
     </style>
 </head>
 <body>
@@ -61,7 +71,8 @@
         <div class="tab-nav">
             <button id="activeTab" class="tab-button active" onclick="showTab('active')">Active (In Custody)</button>
             <button id="archivedTab" class="tab-button" onclick="showTab('archived')">Archived / Completed</button>
-            <button id="logbookTab" class="tab-button" onclick="showTab('logbook')">Internal Logbook (Routed)</button>
+            <button id="logbookTab" class="tab-button" onclick="showTab('logbook')">Internal Logbook</button>
+            <button id="directoryTab" class="tab-button" onclick="showTab('directory')">Directory Management</button>
         </div>
 
         <div class="main-actions-container">
@@ -69,9 +80,8 @@
             <a id="addSubmissionBtn" href="#" target="_blank" class="action-button add-new">Add a Transaction</a>
         </div>
 
-        <div class="filter-wrapper">
+        <div id="filterSection" class="filter-wrapper">
             <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search..." style="flex-grow: 1;">
-            
             <div>
                 <span class="filter-label">Filter Doc Type:</span>
                 <select id="docTypeFilter" class="filter-dropdown" onchange="applyFilters()">
@@ -80,13 +90,27 @@
             </div>
         </div>
 
-        <div class="table-container">
+        <div id="table-container" class="table-container">
             <table id="documentsTable">
-                <thead id="tableHead">
-                    </thead>
+                <thead id="tableHead"></thead>
                 <tbody id="tableBody"></tbody>
             </table>
         </div>
+
+        <div id="directory-container">
+            <div class="upload-box">
+                <h3>Update Directory Database</h3>
+                <p>Upload a CSV file with headers: <b>Name, Email</b>.<br>
+                <small><i>Note: This will overwrite the existing directory list.</i></small></p>
+                
+                <input type="file" id="csvFile" accept=".csv" class="file-input">
+                <br>
+                <button onclick="handleDirectoryUpload()" id="uploadBtn" class="upload-btn">Upload & Update</button>
+                
+                <div id="uploadStatus" class="upload-status"></div>
+            </div>
+        </div>
+
         <div id="loader" class="loader">
             <p>Loading data...</p>
         </div>
@@ -106,8 +130,6 @@
         function initializeDashboard(returnData) {
             APP_URL = returnData.appUrl;
             document.getElementById('addSubmissionBtn').href = `${APP_URL}?page=submit`;
-            
-            // UPDATED: Points to the internal-log page (Entry Form)
             document.getElementById('internalRouteBtn').href = `${APP_URL}?page=internal-log`;
 
             // Populate Doc Type Filter
@@ -121,8 +143,6 @@
 
             // Process Data
             processTransactions(returnData.transactions);
-            
-            // Process Logbook Data
             INTERNAL_LOG_DATA = returnData.internalLog || []; 
 
             showTab('active');
@@ -155,12 +175,29 @@
         function showTab(tabName) {
             CURRENT_TAB = tabName;
             
-            // Toggle Tab Styling
-            document.getElementById('activeTab').classList.toggle('active', tabName === 'active');
-            document.getElementById('archivedTab').classList.toggle('active', tabName === 'archived');
-            document.getElementById('logbookTab').classList.toggle('active', tabName === 'logbook');
+            // Toggle Tab Buttons
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName + 'Tab').classList.add('active');
 
-            // Update Search Placeholder
+            // Toggle Views
+            const tableContainer = document.getElementById('table-container');
+            const directoryContainer = document.getElementById('directory-container');
+            const filterSection = document.getElementById('filterSection');
+
+            if (tabName === 'directory') {
+                // Show Directory Upload, Hide Tables
+                tableContainer.style.display = 'none';
+                filterSection.style.display = 'none';
+                directoryContainer.style.display = 'block';
+                return; 
+            } else {
+                // Show Tables, Hide Directory Upload
+                tableContainer.style.display = 'block';
+                filterSection.style.display = 'flex';
+                directoryContainer.style.display = 'none';
+            }
+
+            // Update Search Placeholder logic
             const searchInput = document.getElementById('searchInput');
             if(tabName === 'logbook') {
                 searchInput.placeholder = "Search Log ID, Document Title, or Recipient...";
@@ -175,37 +212,73 @@
             const docTypeFilter = document.getElementById('docTypeFilter').value;
             let baseData;
             
-            // Select Source Data
             if (CURRENT_TAB === 'active') baseData = ACTIVE_TRANSACTIONS;
             else if (CURRENT_TAB === 'archived') baseData = ARCHIVED_TRANSACTIONS;
             else if (CURRENT_TAB === 'logbook') baseData = INTERNAL_LOG_DATA;
+            else return; // Directory tab
 
-            // Apply Doc Type Filter
             let filteredData = baseData;
             if (docTypeFilter !== 'All') {
                 if (CURRENT_TAB === 'logbook') {
-                    // Logbook has simple 'Type' field
                     filteredData = baseData.filter(item => item.Type === docTypeFilter);
                 } else {
-                    // Transactions have nested documents
                     filteredData = baseData.filter(tx => 
                         tx.documents.some(doc => doc.DocumentType === docTypeFilter)
                     );
                 }
             }
 
-            // Route to appropriate builder
             if (CURRENT_TAB === 'logbook') {
                 buildLogbookTable(filteredData);
             } else {
                 buildTransactionTable(filteredData);
             }
             
-            filterTable(); // Re-apply text search if any
+            filterTable();
+        }
+
+        // --- NEW: Directory Upload Logic ---
+        function handleDirectoryUpload() {
+            const fileInput = document.getElementById('csvFile');
+            const statusDiv = document.getElementById('uploadStatus');
+            const btn = document.getElementById('uploadBtn');
+
+            if (fileInput.files.length === 0) {
+                alert("Please select a CSV file first.");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            btn.disabled = true;
+            btn.textContent = "Uploading...";
+            statusDiv.innerHTML = "";
+
+            reader.onload = function(e) {
+                const csvContent = e.target.result;
+                
+                google.script.run.withSuccessHandler(function(res) {
+                    btn.disabled = false;
+                    btn.textContent = "Upload & Update";
+                    
+                    if (res.success) {
+                        statusDiv.innerHTML = `<span class="success-msg">✅ Success! Updated ${res.count} entries.</span>`;
+                        fileInput.value = ""; // Reset input
+                    } else {
+                        statusDiv.innerHTML = `<span class="error-msg">❌ Error: ${res.error}</span>`;
+                    }
+                }).withFailureHandler(function(err) {
+                    btn.disabled = false;
+                    btn.textContent = "Upload & Update";
+                    statusDiv.innerHTML = `<span class="error-msg">❌ System Error: ${err.message}</span>`;
+                }).processDirectoryUpload(csvContent);
+            };
+
+            reader.readAsText(file);
         }
 
         function buildTransactionTable(transactions) {
-            // Set Headers for Regular Transactions
             const thead = document.getElementById('tableHead');
             thead.innerHTML = `
                 <tr>
@@ -297,7 +370,6 @@
         }
 
         function buildLogbookTable(logs) {
-            // UPDATED: Headers for Logbook including Status and Current Custody
             const thead = document.getElementById('tableHead');
             thead.innerHTML = `
                 <tr>
@@ -325,15 +397,8 @@
                 row.className = 'main-row'; 
                 
                 let dateStr = new Date(log.Date).toLocaleString();
-
-                // Status Logic (Color Coding)
-                // If "Finance Custody", show Blue. If "Routed" or anything else, show Green.
                 let statusColor = (log.Status === 'Finance Custody') ? '#1C2790' : '#198754';
-
-                // UPDATED: Link points to internal-update page with 'id' parameter
                 const updateUrl = `${APP_URL}?page=internal-update&id=${log.LogID}`;
-                
-                // NEW: Print Slip Link
                 const printUrl = `${APP_URL}?action=internal-print-slip&id=${log.LogID}`;
 
                 row.innerHTML = `
@@ -373,9 +438,7 @@
 
             for (let i = 0; i < rows.length; i++) {
                 const mainRow = rows[i];
-                // Details row check only applies to regular transactions
                 const detailsRow = (CURRENT_TAB !== 'logbook') ? mainRow.nextElementSibling : null;
-                
                 const mainText = mainRow.textContent || mainRow.innerText;
                 const detailsText = detailsRow ? (detailsRow.textContent || detailsRow.innerText) : "";
                 
