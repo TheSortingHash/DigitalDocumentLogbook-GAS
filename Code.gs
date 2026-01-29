@@ -641,7 +641,6 @@ function sendPickupWithCommentsEmail(txDetails, docsList, notes, isBatch) {
 function processClaim(claimData) {
   try {
     const documentsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Documents');
-    // Folder Logic
     const folder = DriveApp.getFoldersByName('DMS Signatures').hasNext() ? DriveApp.getFoldersByName('DMS Signatures').next() : DriveApp.createFolder('DMS Signatures');
     
     const imageData = claimData.signature.split(',')[1];
@@ -654,6 +653,10 @@ function processClaim(claimData) {
     const directory = getDirectory();
     const claimantObj = directory.find(d => d.name === claimData.claimedBy);
     const claimantEmail = claimantObj ? claimantObj.email : "";
+
+    // 2. TRACKING FLAG (New)
+    // Tracks if the claimant has received at least one email in this transaction
+    let claimantWasNotified = false;
 
     const lastRow = documentsSheet.getLastRow();
     const data = documentsSheet.getRange(2, 1, lastRow - 1, 1).getValues();
@@ -669,7 +672,6 @@ function processClaim(claimData) {
            documentsSheet.getRange(row, 5).setValue(claimTimestamp);
            documentsSheet.getRange(row, 6).setValue(fileUrl);
            
-           // Append Claimant Name to Notes
            const existingNotes = documentsSheet.getRange(row, 7).getValue();
            const newNote = existingNotes ? `${existingNotes} [Claimed by: ${claimData.claimedBy}]` : `[Claimed by: ${claimData.claimedBy}]`;
            documentsSheet.getRange(row, 7).setValue(newNote);
@@ -690,8 +692,8 @@ function processClaim(claimData) {
 
     if (affectedDocs.length > 0) {
       const txDetails = getTransactionDetails(claimData.transactionId);
-      
       const principalGroups = {};
+      
       affectedDocs.forEach(doc => {
         if (doc.PrincipalEmail && doc.PrincipalEmail.trim() !== "") {
           if (!principalGroups[doc.PrincipalEmail]) {
@@ -711,15 +713,24 @@ function processClaim(claimData) {
               ContactPerson: group.Name || "Document Owner",
               ContactEmail: email
             };
-            // CC the Claimant here so they know the owner was notified
+            
+            // Send email and Mark claimant as notified
             sendClaimedEmail(principalTxDetails, group.Docs, blob, claimTimestamp, claimData.claimedBy, claimantEmail);
+            claimantWasNotified = true; 
         }
       });
 
-      // B. Notify Liaison (NO CC)
-      // We do NOT CC the claimant here to avoid the 3rd email "bombardment".
-      // The Liaison email is purely for the Liaison's records.
-      sendClaimedEmail(txDetails, affectedDocs, blob, claimTimestamp, claimData.claimedBy, null); 
+      // B. Notify Liaison (Conditional CC to Claimant)
+      // LOGIC FIX: If claimant hasn't been notified yet (e.g. they are a third party 
+      // or the Owner loop was skipped), CC them here.
+      // Also ensure we don't CC them if they ARE the Liaison (avoid self-CC).
+      
+      let liaisonCc = null;
+      if (!claimantWasNotified && claimantEmail && claimantEmail !== txDetails.ContactEmail) {
+          liaisonCc = claimantEmail;
+      }
+
+      sendClaimedEmail(txDetails, affectedDocs, blob, claimTimestamp, claimData.claimedBy, liaisonCc);
 
       return `Success: Released ${affectedDocs.length} document(s).`;
     } 
