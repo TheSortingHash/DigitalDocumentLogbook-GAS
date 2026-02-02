@@ -238,10 +238,10 @@ function sendLiaisonReceiptEmail(txDetails, transactionId, documents) {
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
         <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-          <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo" style="width: 320px; display: block; margin: 0 auto;">
+          <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo" style="width: 400px; display: block; margin: 0 auto;">
         </div>
         <div style="padding: 40px; border-top: 6px solid #CDAE2C;">
-          <h1 style="color: #1C2790; margin: 0 0 20px 0; text-align: center; font-size: 24px; text-transform: uppercase;">Transaction Logged</h1>
+          <h1 style="color: #1C2790; margin: 0 0 20px 0; text-align: center; font-size: 24px; text-transform: uppercase;">TRANSACTION LOGGED</h1>
           <div style="background-color: #f0f4ff; padding: 20px; text-align: center; margin: 0 0 30px 0; border-radius: 4px; border: 1px dashed #1C2790;">
             <span style="font-size: 11px; color: #555; text-transform: uppercase; display: block; margin-bottom: 5px;">Transaction Reference</span>
             <span style="font-size: 24px; font-weight: bold; color: #1C2790;">${transactionId}</span>
@@ -283,10 +283,10 @@ function sendOwnerReceiptEmail(ownerName, ownerEmail, transactionId, documents, 
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
         <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-          <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo" style="width: 320px; display: block; margin: 0 auto;">
+          <img src="https://i.imgur.com/jaEbfAR.png" alt="DAP Logo" style="width: 400px; display: block; margin: 0 auto;">
         </div>
         <div style="padding: 40px; border-top: 6px solid #CDAE2C;">
-          <h1 style="color: #1C2790; margin: 0 0 20px 0; text-align: center; font-size: 24px; text-transform: uppercase;">Document Received</h1>
+          <h1 style="color: #1C2790; margin: 0 0 20px 0; text-align: center; font-size: 24px; text-transform: uppercase;">DOCUMENT RECEIVED</h1>
           <div style="background-color: #f0f4ff; padding: 20px; text-align: center; margin: 0 0 30px 0; border-radius: 4px; border: 1px dashed #1C2790;">
             <span style="font-size: 11px; color: #555; text-transform: uppercase; display: block; margin-bottom: 5px;">Transaction Reference</span>
             <span style="font-size: 24px; font-weight: bold; color: #1C2790;">${transactionId}</span>
@@ -600,9 +600,9 @@ function sendReadyForPickupEmail(txDetails, docsList, notes, isBatch) {
   const html = `
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #1C2790; padding: 30px; text-align: center;"><img src="https://i.imgur.com/jaEbfAR.png" width="320"></div>
+        <div style="background-color: #1C2790; padding: 30px; text-align: center;"><img src="https://i.imgur.com/jaEbfAR.png" width="400"></div>
         <div style="padding: 40px; border-top: 6px solid #198754;">
-          <h1 style="color: #198754; text-align: center;">Ready for Pickup</h1>
+          <h1 style="color: #198754; text-align: center;">READY FOR PICKUP</h1>
           <p>Dear <b>${txDetails.ContactPerson}</b>,</p>
           <p>The Finance Office has signed the following documents:</p>
           <table style="width:100%;border-collapse:collapse;margin-top:20px;"><thead><tr style="background-color:#198754;color:white;"><th style="padding:10px;">Title</th><th style="padding:10px;">Type</th></tr></thead><tbody>${rows}</tbody></table>
@@ -623,9 +623,9 @@ function sendPickupWithCommentsEmail(txDetails, docsList, notes, isBatch) {
   const html = `
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #1C2790; padding: 30px; text-align: center;"><img src="https://i.imgur.com/jaEbfAR.png" width="320"></div>
+        <div style="background-color: #1C2790; padding: 30px; text-align: center;"><img src="https://i.imgur.com/jaEbfAR.png" width="400"></div>
         <div style="padding: 40px; border-top: 6px solid #ffc107;">
-          <h1 style="color: #bfa006; text-align: center;">Action Required</h1>
+          <h1 style="color: #bfa006; text-align: center;">ACTION REQUIRED</h1>
           <p>Dear <b>${txDetails.ContactPerson}</b>,</p>
           <p>The Finance Office has reviewed your documents and they require attention:</p>
           <table style="width:100%;border-collapse:collapse;margin-top:20px;"><thead><tr style="background-color:#fff3cd;color:#856404;"><th style="padding:10px;">Title</th><th style="padding:10px;">Type</th></tr></thead><tbody>${rows}</tbody></table>
@@ -762,10 +762,10 @@ function sendClaimedEmail(txDetails, docsList, signatureBlob, timestamp, claiman
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-          <img src="https://i.imgur.com/jaEbfAR.png" width="320">
+          <img src="https://i.imgur.com/jaEbfAR.png" width="400">
         </div>
         <div style="padding: 40px; border-top: 6px solid #1C2790;">
-          <h1 style="color: #1C2790; text-align: center;">Transaction Complete</h1>
+          <h1 style="color: #1C2790; text-align: center;">TRANSACTION COMPLETE</h1>
           <p>Dear <b>${txDetails.ContactPerson}</b>,</p>
           <p>This email confirms that the following Finance documents were successfully claimed:</p>
           
@@ -918,10 +918,10 @@ function sendPulledOutEmail(txDetails, docsList, signatureBlob, timestamp, reaso
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-          <img src="https://i.imgur.com/jaEbfAR.png" width="320">
+          <img src="https://i.imgur.com/jaEbfAR.png" width="400">
         </div>
         <div style="padding: 40px; border-top: 6px solid #dc3545;">
-          <h1 style="color: #dc3545; text-align: center;">Retrieval Notice</h1>
+          <h1 style="color: #dc3545; text-align: center;">RETRIEVAL NOTICE</h1>
           <p>Dear <b>${txDetails.ContactPerson}</b>,</p>
           <p>The following document(s) have been retrieved/pulled out from the Finance Office:</p>
           
@@ -1013,10 +1013,10 @@ function sendRelogEmail(recipientData, docsList, notes, isLiaison) {
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-          <img src="https://i.imgur.com/jaEbfAR.png" width="320">
+          <img src="https://i.imgur.com/jaEbfAR.png" width="400">
         </div>
         <div style="padding: 40px; border-top: 6px solid #fd7e14;">
-          <h1 style="color: #fd7e14; text-align: center;">Returned to Custody</h1>
+          <h1 style="color: #fd7e14; text-align: center;">RETURNED TO CUSTODY</h1>
           <p>Dear <b>${recipientData.ContactPerson}</b>,</p>
           <p>This is to notify you that the following document(s) have been <b>returned to Finance custody</b> (Re-logged) and are currently being processed:</p>
           
