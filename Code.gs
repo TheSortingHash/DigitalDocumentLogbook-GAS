@@ -607,7 +607,7 @@ function sendReadyForPickupEmail(txDetails, docsList, notes, isBatch) {
           <p>The Finance Office has signed the following documents:</p>
           <table style="width:100%;border-collapse:collapse;margin-top:20px;"><thead><tr style="background-color:#198754;color:white;"><th style="padding:10px;">Title</th><th style="padding:10px;">Type</th></tr></thead><tbody>${rows}</tbody></table>
           ${remarksHtml}
-          <p style="margin-top:30px;text-align:center;">Please proceed to the Finance Office to claim your documents.</p>
+          <p style="margin-top:30px;text-align:center;">You may now proceed to the Finance Office to claim your documents or have someone claim it for you.</p>
         </div>
         <div style="background-color: #eeeeee; padding: 20px; text-align: center; color: #888;">&copy; Finance Department - Office of the Dept Manager.</div>
       </div>
