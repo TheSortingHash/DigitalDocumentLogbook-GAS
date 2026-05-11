@@ -20,6 +20,9 @@
       #add-doc-btn { width: 100%; background-color: #28a745; color: white; margin-top: 10px; }
       
       .document-entry { background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; margin-bottom: 15px; position: relative; }
+      .document-entry.prefilled { background-color: #eef3ff; border-left: 4px solid #1C2790; }
+      .ref-badge { display: inline-block; background-color: #1C2790; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 10px; margin-bottom: 8px; font-weight: bold; letter-spacing: 0.3px; }
+      .prefill-banner { background-color: #eef3ff; border: 1px solid #1C2790; color: #1C2790; padding: 12px 15px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; }
       .remove-btn { position: absolute; top: 10px; right: 10px; background-color: #dc3545; color: white; width: 30px; height: 30px; line-height: 30px; text-align: center; }
 
       /* Autocomplete */
@@ -49,7 +52,10 @@
     </div>
 
     <div class="container" id="formContainer">
-      <form id="logForm"> 
+      <div id="prefillBanner" class="prefill-banner" style="display:none;">
+        Documents below were pre-loaded from the main workflow. The Transaction reference is included in each title. You can still edit, add, or remove rows before logging.
+      </div>
+      <form id="logForm">
         <div class="form-group">
             <label>Encoder Name (Optional)</label>
             <input type="text" id="encoderName" placeholder="Enter your name...">
@@ -97,29 +103,67 @@
 
     <script>
       const docTypes = <?!= JSON.stringify(docTypes) ?>;
+      const PREFILL_RAW = <?!= JSON.stringify(prefillDocs || "") ?>;
       let directory = [];
 
-      function createDocEntryHTML() {
-        let options = `<option value="" disabled selected>Select type...</option>`;
-        docTypes.forEach(t => options += `<option value="${t}">${t}</option>`);
+      function escapeHtmlAttr(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      function createDocEntryHTML(prefill) {
+        const selectedType = prefill && prefill.type ? prefill.type : "";
+        const selectedTitle = prefill && prefill.title ? prefill.title : "";
+        const refBadge = prefill && prefill.ref
+          ? `<div class="ref-badge">From Tx: ${escapeHtmlAttr(prefill.ref)}</div>`
+          : "";
+
+        let options = `<option value="" disabled ${selectedType ? "" : "selected"}>Select type...</option>`;
+        docTypes.forEach(t => {
+          const sel = (t === selectedType) ? "selected" : "";
+          options += `<option value="${escapeHtmlAttr(t)}" ${sel}>${escapeHtmlAttr(t)}</option>`;
+        });
         return `
           <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+          ${refBadge}
           <div class="form-group">
             <label>Document Type</label>
             <select class="doc-type-select" required>${options}</select>
           </div>
           <div class="form-group">
             <label>Document Title</label>
-            <input type="text" class="doc-title-input" required>
+            <input type="text" class="doc-title-input" value="${escapeHtmlAttr(selectedTitle)}" required>
           </div>
         `;
       }
 
-      function addDocumentEntry() {
+      function addDocumentEntry(prefill) {
         const div = document.createElement('div');
-        div.className = 'document-entry';
-        div.innerHTML = createDocEntryHTML();
+        div.className = 'document-entry' + (prefill ? ' prefilled' : '');
+        div.innerHTML = createDocEntryHTML(prefill);
         document.getElementById('documents-container').appendChild(div);
+      }
+
+      function loadPrefilledDocs() {
+        if (!PREFILL_RAW) return false;
+        let parsed;
+        try {
+          // Inverse of: btoa(unescape(encodeURIComponent(json))) on the dashboard.
+          const json = decodeURIComponent(escape(atob(PREFILL_RAW)));
+          parsed = JSON.parse(json);
+        } catch (e) {
+          console.error("Could not parse prefill data: " + e);
+          return false;
+        }
+        if (!Array.isArray(parsed) || parsed.length === 0) return false;
+
+        parsed.forEach(d => {
+          const fullTitle = d.ref ? `[Ref: ${d.ref}] ${d.title}` : d.title;
+          addDocumentEntry({ ref: d.ref, type: d.type, title: fullTitle });
+        });
+        document.getElementById('prefillBanner').style.display = 'block';
+        return true;
       }
 
       function attachAutocomplete(inp) {
@@ -139,11 +183,14 @@
 
       document.addEventListener('DOMContentLoaded', function() {
         google.script.run.withSuccessHandler(data => { directory = data; }).getDirectory();
-        
+
         attachAutocomplete(document.getElementById('receivedFrom'));
-        addDocumentEntry(); 
-        document.getElementById('add-doc-btn').addEventListener('click', addDocumentEntry);
-        
+
+        const hadPrefill = loadPrefilledDocs();
+        if (!hadPrefill) addDocumentEntry();
+
+        document.getElementById('add-doc-btn').addEventListener('click', () => addDocumentEntry());
+
         document.getElementById('logForm').addEventListener('submit', function(e) {
           e.preventDefault();
           const btn = document.getElementById('submitButton');
@@ -163,9 +210,30 @@
              documents: docs
           };
 
-          // PASS THE NAME TO SUCCESS HANDLER
-          google.script.run.withSuccessHandler((res) => onSuccess(res, formData.receivedFrom))
-                           .processInternalLog(formData);
+          const submitNow = () => {
+            google.script.run.withSuccessHandler((res) => onSuccess(res, formData.receivedFrom))
+                             .processInternalLog(formData);
+          };
+
+          // Run duplicate check first; only relevant for titles already containing a [Ref: ...] tag.
+          const titlesToCheck = docs.map(d => d.docTitle).filter(t => /\[Ref:\s*[^\]]+\]/i.test(t));
+          if (titlesToCheck.length === 0) { submitNow(); return; }
+
+          google.script.run.withSuccessHandler(dups => {
+            if (dups && dups.length > 0) {
+              const proceed = confirm(
+                "The following document(s) appear to have already been routed into the Internal Logbook:\n\n" +
+                dups.join("\n") +
+                "\n\nLog them again anyway?"
+              );
+              if (!proceed) {
+                btn.disabled = false; btn.textContent = 'Log Documents & Print Slip';
+                return;
+              }
+            }
+            submitNow();
+          }).withFailureHandler(() => submitNow())
+            .checkExternalRefDuplicates(titlesToCheck);
         });
       });
 

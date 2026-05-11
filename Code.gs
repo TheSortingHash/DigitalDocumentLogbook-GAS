@@ -15,8 +15,9 @@ function doGet(e) {
   // 3. Internal Logging Page (Step 1 - Log & Print Slip)
   else if (e.parameter.page === 'internal-log') {
     let template = HtmlService.createTemplateFromFile('InternalLogForm');
-    template.docTypes = getDocTypes(); 
-    template.directory = getDirectory(); 
+    template.docTypes = getDocTypes();
+    template.directory = getDirectory();
+    template.prefillDocs = e.parameter.prefill || "";
     return template.evaluate().setTitle('Internal Document Logger');
   }
 
