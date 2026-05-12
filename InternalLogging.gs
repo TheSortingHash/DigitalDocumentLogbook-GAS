@@ -32,10 +32,10 @@ function sendRoutedEmail(recipientData, docsList, signatureBlob, logID, timestam
       <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
         <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-            <img src="https://i.imgur.com/jaEbfAR.png" width="320">
+            <img src="https://i.imgur.com/jaEbfAR.png" width="400">
           </div>
           <div style="padding: 40px; border-top: 6px solid #1C2790;">
-            <h1 style="color: #1C2790; text-align: center;">Documents Routed</h1>
+            <h1 style="color: #1C2790; text-align: center;">DOCUMENTS ROUTED</h1>
             <p>Dear <b>${recipientData.name}</b>,</p>
             <p>This email confirms that the following documents have been routed to your custody:</p>
             
@@ -121,6 +121,30 @@ function generateLogID() {
   return `${prefix}-${newSeq}`;
 }
 
+
+
+/**
+ * Checks whether any of the supplied full titles already exist in InternalDocuments.
+ * Used to warn when routing the same external document into the internal logbook twice.
+ */
+function checkExternalRefDuplicates(fullTitles) {
+  try {
+    if (!fullTitles || !fullTitles.length) return [];
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const docSheet = ss.getSheetByName("InternalDocuments");
+    if (!docSheet || docSheet.getLastRow() < 2) return [];
+
+    const existing = docSheet.getRange(2, 2, docSheet.getLastRow() - 1, 1)
+                             .getValues().flat()
+                             .map(t => String(t).trim().toLowerCase());
+
+    const seen = new Set(existing);
+    return fullTitles.filter(t => seen.has(String(t).trim().toLowerCase()));
+  } catch (e) {
+    console.error("checkExternalRefDuplicates failed: " + e.toString());
+    return [];
+  }
+}
 
 
 /* --- INTERNAL LOGBOOK: SERVER SIDE --- */
@@ -348,7 +372,7 @@ function sendFinanceReceivedEmail(recipientData, docsList, logID, isReturn) {
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
   
   // Dynamic Header Text
-  const headerText = isReturn ? "Returned to Finance" : "Receipt Acknowledgment";
+  const headerText = isReturn ? "RETURNED TO FINANCE" : "RECEIPT ACKNOWLEDGEMENT";
   const introText = isReturn 
     ? "This email confirms that the Finance Department has received the following documents back from your custody:"
     : "This email serves as proof that the Finance Department has received the following documents from you:";
@@ -364,7 +388,7 @@ function sendFinanceReceivedEmail(recipientData, docsList, logID, isReturn) {
     <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
       <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #1C2790; padding: 30px; text-align: center;">
-          <img src="https://i.imgur.com/jaEbfAR.png" width="320">
+          <img src="https://i.imgur.com/jaEbfAR.png" width="400">
         </div>
         <div style="padding: 40px; border-top: 6px solid #1C2790;">
           <h1 style="color: #1C2790; text-align: center;">${headerText}</h1>
