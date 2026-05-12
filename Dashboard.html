@@ -48,6 +48,25 @@
         .status { padding: 4px 8px; border-radius: 12px; color: white; font-weight: bold; font-size: 11px; text-align: center; display: inline-block; }
         .loader { text-align: center; padding: 50px; font-size: 18px; color: #555; }
 
+        /* Multi-select for internal routing */
+        .doc-checkbox { width: 16px; height: 16px; cursor: pointer; }
+        tr.doc-selected { background-color: #eef3ff !important; }
+        .selection-bar {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background-color: #1C2790; color: #fff; padding: 12px 20px;
+            border-radius: 50px; box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            display: none; align-items: center; gap: 14px; z-index: 1000;
+            font-size: 14px;
+        }
+        .selection-bar.visible { display: flex; }
+        .selection-bar .count { font-weight: bold; }
+        .selection-bar button {
+            border: none; padding: 8px 16px; border-radius: 25px;
+            cursor: pointer; font-weight: bold; font-size: 13px;
+        }
+        .selection-bar .route-btn { background-color: #198754; color: #fff; }
+        .selection-bar .clear-btn { background-color: rgba(255,255,255,0.18); color: #fff; }
+
         /* --- NEW: Directory Upload Styles --- */
         #directory-container { display: none; padding: 20px; border: 2px dashed #ccc; border-radius: 8px; text-align: center; background-color: #fafafa; }
         .upload-box { max-width: 500px; margin: 0 auto; }
@@ -116,12 +135,62 @@
         </div>
     </div>
 
+    <div id="selectionBar" class="selection-bar">
+        <span><span class="count" id="selectionCount">0</span> document(s) selected</span>
+        <button class="route-btn" onclick="routeSelectedToInternal()">Route to Internal Logbook</button>
+        <button class="clear-btn" onclick="clearDocSelection()">Clear</button>
+    </div>
+
     <script>
         let ACTIVE_TRANSACTIONS = [];
         let ARCHIVED_TRANSACTIONS = [];
-        let INTERNAL_LOG_DATA = []; 
+        let INTERNAL_LOG_DATA = [];
         let APP_URL = '';
         let CURRENT_TAB = 'active';
+        // key: `${txId}::${rowNumber}` -> { txId, rowNumber, title, type }
+        const SELECTED_DOCS = new Map();
+
+        function selectionKey(txId, rowNumber) { return `${txId}::${rowNumber}`; }
+
+        function updateSelectionBar() {
+            const bar = document.getElementById('selectionBar');
+            const count = SELECTED_DOCS.size;
+            document.getElementById('selectionCount').textContent = count;
+            bar.classList.toggle('visible', count > 0);
+        }
+
+        function toggleDocSelection(checkbox, txId, rowNumber, title, type) {
+            const key = selectionKey(txId, rowNumber);
+            const row = checkbox.closest('tr');
+            if (checkbox.checked) {
+                SELECTED_DOCS.set(key, { txId, rowNumber, title, type });
+                if (row) row.classList.add('doc-selected');
+            } else {
+                SELECTED_DOCS.delete(key);
+                if (row) row.classList.remove('doc-selected');
+            }
+            updateSelectionBar();
+        }
+
+        function clearDocSelection() {
+            SELECTED_DOCS.clear();
+            document.querySelectorAll('.doc-checkbox').forEach(cb => { cb.checked = false; });
+            document.querySelectorAll('tr.doc-selected').forEach(r => r.classList.remove('doc-selected'));
+            updateSelectionBar();
+        }
+
+        function routeSelectedToInternal() {
+            if (SELECTED_DOCS.size === 0) return;
+            const payload = Array.from(SELECTED_DOCS.values()).map(d => ({
+                ref: d.txId,
+                title: d.title,
+                type: d.type
+            }));
+            // base64-encode JSON so it travels safely as a URL query parameter.
+            const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+            const url = `${APP_URL}?page=internal-log&prefill=${encodeURIComponent(encoded)}`;
+            window.open(url, '_blank');
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             google.script.run.withSuccessHandler(initializeDashboard).getDashboardData();
@@ -301,10 +370,12 @@
                 return;
             }
 
+            const showCheckboxes = (CURRENT_TAB === 'active');
+
             transactions.forEach(tx => {
                 const manageUrl = `${APP_URL}?action=update&id=${tx.TransactionID}`;
                 const printUrl = `${APP_URL}?action=print-slip&id=${tx.TransactionID}`;
-                
+
                 let mainRow = document.createElement('tr');
                 mainRow.className = 'main-row';
                 mainRow.innerHTML = `
@@ -322,7 +393,7 @@
 
                 let detailsRow = document.createElement('tr');
                 detailsRow.className = 'details-row';
-                
+
                 let subTableRows = '';
                 tx.documents.forEach(doc => {
                     let statusColor = '#6c757d';
@@ -333,8 +404,21 @@
 
                     let ownerName = doc.PrincipalName || "(Liaison)";
 
+                    let checkboxCell = '';
+                    let rowClass = '';
+                    if (showCheckboxes) {
+                        const key = selectionKey(tx.TransactionID, doc.rowNumber);
+                        const isChecked = SELECTED_DOCS.has(key);
+                        if (isChecked) rowClass = ' class="doc-selected"';
+                        // Escape values for use inside an onchange attribute string.
+                        const safeTitle = String(doc.DocumentTitle).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        const safeType = String(doc.DocumentType).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        checkboxCell = `<td><input type="checkbox" class="doc-checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDocSelection(this, '${tx.TransactionID}', ${doc.rowNumber}, '${safeTitle}', '${safeType}')"></td>`;
+                    }
+
                     subTableRows += `
-                        <tr>
+                        <tr${rowClass}>
+                            ${checkboxCell}
                             <td><b>${ownerName}</b></td>
                             <td>${doc.DocumentTitle}</td>
                             <td>${doc.DocumentType}</td>
@@ -344,12 +428,14 @@
                     `;
                 });
 
+                const selectHeader = showCheckboxes ? '<th style="width:30px;"></th>' : '';
                 detailsRow.innerHTML = `
                     <td colspan="7">
                         <div class="details-container">
                             <table class="sub-table">
                                 <thead>
                                     <tr>
+                                        ${selectHeader}
                                         <th>Document Owner</th>
                                         <th>Document Title</th>
                                         <th>Type</th>

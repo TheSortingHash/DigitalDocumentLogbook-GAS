@@ -123,6 +123,30 @@ function generateLogID() {
 
 
 
+/**
+ * Checks whether any of the supplied full titles already exist in InternalDocuments.
+ * Used to warn when routing the same external document into the internal logbook twice.
+ */
+function checkExternalRefDuplicates(fullTitles) {
+  try {
+    if (!fullTitles || !fullTitles.length) return [];
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const docSheet = ss.getSheetByName("InternalDocuments");
+    if (!docSheet || docSheet.getLastRow() < 2) return [];
+
+    const existing = docSheet.getRange(2, 2, docSheet.getLastRow() - 1, 1)
+                             .getValues().flat()
+                             .map(t => String(t).trim().toLowerCase());
+
+    const seen = new Set(existing);
+    return fullTitles.filter(t => seen.has(String(t).trim().toLowerCase()));
+  } catch (e) {
+    console.error("checkExternalRefDuplicates failed: " + e.toString());
+    return [];
+  }
+}
+
+
 /* --- INTERNAL LOGBOOK: SERVER SIDE --- */
 
 // 1. GET DATA FOR INTERNAL UPDATE PAGE (Mirrors getTransactionDetails)
