@@ -423,12 +423,13 @@ function getDashboardData() {
       transactions: allTransactions.reverse(),
       docTypes: Array.from(docTypes),
       appUrl: getWebAppUrlSafe(),
-      internalLog: internalLog.reverse()
+      internalLog: internalLog.reverse(),
+      directory: getDirectory()
     };
 
   } catch (e) {
     console.error("getDashboardData CRASHED: " + e.toString());
-    return { transactions: [], docTypes: [], appUrl: getWebAppUrlSafe(), internalLog: [] };
+    return { transactions: [], docTypes: [], appUrl: getWebAppUrlSafe(), internalLog: [], directory: [] };
   }
 }
 
@@ -642,11 +643,6 @@ function sendPickupWithCommentsEmail(txDetails, docsList, notes, isBatch) {
 function processClaim(claimData) {
   try {
     const documentsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Documents');
-    const folder = DriveApp.getFoldersByName('DMS Signatures').hasNext() ? DriveApp.getFoldersByName('DMS Signatures').next() : DriveApp.createFolder('DMS Signatures');
-    
-    const imageData = claimData.signature.split(',')[1];
-    const blob = Utilities.newBlob(Utilities.base64Decode(imageData), 'image/png', `${claimData.transactionId}-Release-Sig.png`);
-    const fileUrl = folder.createFile(blob).getUrl();
     const claimTimestamp = new Date();
     const affectedDocs = [];
 
@@ -671,8 +667,7 @@ function processClaim(claimData) {
         if (isTarget && (currentStatus === 'Signed' || currentStatus === 'For pick up, but with comments')) {
            documentsSheet.getRange(row, 4).setValue('Claimed/Released');
            documentsSheet.getRange(row, 5).setValue(claimTimestamp);
-           documentsSheet.getRange(row, 6).setValue(fileUrl);
-           
+
            const existingNotes = documentsSheet.getRange(row, 7).getValue();
            const newNote = existingNotes ? `${existingNotes} [Claimed by: ${claimData.claimedBy}]` : `[Claimed by: ${claimData.claimedBy}]`;
            documentsSheet.getRange(row, 7).setValue(newNote);
@@ -716,8 +711,8 @@ function processClaim(claimData) {
             };
             
             // Send email and Mark claimant as notified
-            sendClaimedEmail(principalTxDetails, group.Docs, blob, claimTimestamp, claimData.claimedBy, claimantEmail);
-            claimantWasNotified = true; 
+            sendClaimedEmail(principalTxDetails, group.Docs, claimTimestamp, claimData.claimedBy, claimantEmail);
+            claimantWasNotified = true;
         }
       });
 
@@ -731,7 +726,7 @@ function processClaim(claimData) {
           liaisonCc = claimantEmail;
       }
 
-      sendClaimedEmail(txDetails, affectedDocs, blob, claimTimestamp, claimData.claimedBy, liaisonCc);
+      sendClaimedEmail(txDetails, affectedDocs, claimTimestamp, claimData.claimedBy, liaisonCc);
 
       return `Success: Released ${affectedDocs.length} document(s).`;
     } 
@@ -742,14 +737,14 @@ function processClaim(claimData) {
 
 /**
  * Sends a "Claimed/Released" notification email.
- * Theme: Standard Finance Blue.
+ * Theme: Standard Finance Blue. Signature-free: confirmation is name-based.
  * Logic: CC behavior is now controlled by the caller (processClaim).
  */
-function sendClaimedEmail(txDetails, docsList, signatureBlob, timestamp, claimantName, ccEmail) {
+function sendClaimedEmail(txDetails, docsList, timestamp, claimantName, ccEmail) {
   const subject = `[Finance] Document Claimed - Ref: ${txDetails.TransactionID}`;
   const formattedTimestamp = timestamp.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
-  
-  const rows = docsList.map(d => 
+
+  const rows = docsList.map(d =>
     `<tr>
        <td style="padding:12px;border-bottom:1px solid #eee;">${d.Title}</td>
        <td style="padding:12px;border-bottom:1px solid #eee;color:#555;">${d.Type}</td>
@@ -769,7 +764,7 @@ function sendClaimedEmail(txDetails, docsList, signatureBlob, timestamp, claiman
           <h1 style="color: #1C2790; text-align: center;">TRANSACTION COMPLETE</h1>
           <p>Dear <b>${txDetails.ContactPerson}</b>,</p>
           <p>This email confirms that the following Finance documents were successfully claimed:</p>
-          
+
           <table style="width:100%;border-collapse:collapse;margin-top:20px;">
             <thead>
               <tr style="background-color:#f2f4f8;">
@@ -781,12 +776,13 @@ function sendClaimedEmail(txDetails, docsList, signatureBlob, timestamp, claiman
           </table>
 
           <div style="margin-top:30px;border:1px solid #eee;padding:20px;text-align:center;">
-            <p style="font-weight:bold; color:#555;">PROOF OF RECEIPT</p>
-            <div style="display:inline-block;padding:5px;border:1px dashed #ccc;">
-              <img src="cid:signatureImage" style="height:80px;">
-            </div>
-            <p style="margin-top:10px; font-weight:bold;">${claimantName}</p>
+            <p style="font-weight:bold; color:#555;">RECEIVED BY</p>
+            <p style="margin:8px 0; font-size:18px; font-weight:bold; color:#1C2790;">${claimantName}</p>
             <p style="font-size:12px; color:#777;">Claimed on: ${formattedTimestamp}</p>
+          </div>
+
+          <div style="margin-top:20px;padding:15px 20px;background-color:#fff9db;border:1px solid #ffeeba;color:#856404;font-size:13px;border-radius:4px;">
+            <b>No reply needed.</b> If you did <u>not</u> pick up these documents, or did not authorize <b>${claimantName}</b> to pick them up on your behalf, please reply to this email to dispute it. Otherwise, no action is required &mdash; this serves as your confirmation of receipt.
           </div>
         </div>
         <div style="background-color: #eeeeee; padding: 20px; text-align: center; color: #888;">
@@ -794,25 +790,19 @@ function sendClaimedEmail(txDetails, docsList, signatureBlob, timestamp, claiman
         </div>
       </div>
     </div>`;
-  
+
   MailApp.sendEmail({
     to: txDetails.ContactEmail,
     cc: finalCc,
     subject: subject,
     htmlBody: html,
-    name: 'Finance - Office of the Dept Manager',
-    inlineImages: { signatureImage: signatureBlob }
+    name: 'Finance - Office of the Dept Manager'
   });
 }
 
 function processPullOut(pullOutData) {
   try {
     const documentsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Documents');
-    const folder = DriveApp.getFoldersByName('DMS Signatures').hasNext() ? DriveApp.getFoldersByName('DMS Signatures').next() : DriveApp.createFolder('DMS Signatures');
-    
-    const imageData = pullOutData.signature.split(',')[1];
-    const blob = Utilities.newBlob(Utilities.base64Decode(imageData), 'image/png', `${pullOutData.transactionId}-PullOut-Sig.png`);
-    const fileUrl = folder.createFile(blob).getUrl();
     const timestamp = new Date();
     const affectedDocs = [];
 
@@ -834,8 +824,7 @@ function processPullOut(pullOutData) {
         if (isTarget && currentStatus !== 'Claimed/Released' && currentStatus !== 'Pulled Out') {
            documentsSheet.getRange(row, 4).setValue('Pulled Out');
            documentsSheet.getRange(row, 5).setValue(timestamp);
-           documentsSheet.getRange(row, 6).setValue(fileUrl);
-           
+
            const fullComment = `${pullOutData.comments} [Pulled out by: ${pullerName}]`;
            documentsSheet.getRange(row, 7).setValue(fullComment);
            
@@ -877,7 +866,7 @@ function processPullOut(pullOutData) {
             };
             
             // PASSING pullerEmail AS CC HERE
-            sendPulledOutEmail(principalTxDetails, group.Docs, blob, timestamp, pullOutData.comments, pullerName, pullerEmail);
+            sendPulledOutEmail(principalTxDetails, group.Docs, timestamp, pullOutData.comments, pullerName, pullerEmail);
         }
       });
 
@@ -886,7 +875,7 @@ function processPullOut(pullOutData) {
       // Liaison needs the record.
       if (txDetails.ContactEmail !== pullerEmail) {
          // Pass null for CC
-         sendPulledOutEmail(txDetails, affectedDocs, blob, timestamp, pullOutData.comments, pullerName, null);
+         sendPulledOutEmail(txDetails, affectedDocs, timestamp, pullOutData.comments, pullerName, null);
       }
 
       return `Success: Pulled out ${affectedDocs.length} document(s).`;
@@ -898,14 +887,14 @@ function processPullOut(pullOutData) {
 
 /**
  * Sends a "Pulled Out" notification email.
- * Theme: Red/Warning colors.
+ * Theme: Red/Warning colors. Signature-free: confirmation is name-based.
  * Update: Now accepts 'ccEmail' to copy the puller.
  */
-function sendPulledOutEmail(txDetails, docsList, signatureBlob, timestamp, reason, pulledOutByName, ccEmail) {
+function sendPulledOutEmail(txDetails, docsList, timestamp, reason, pulledOutByName, ccEmail) {
   const subject = `[Finance] Document Retrieved - Ref: ${txDetails.TransactionID}`;
   const formattedTimestamp = timestamp.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
-  
-  const rows = docsList.map(d => 
+
+  const rows = docsList.map(d =>
     `<tr>
        <td style="padding:12px;border-bottom:1px solid #f8d7da;">${d.Title}</td>
        <td style="padding:12px;border-bottom:1px solid #f8d7da;color:#721c24;">${d.Type}</td>
@@ -925,7 +914,7 @@ function sendPulledOutEmail(txDetails, docsList, signatureBlob, timestamp, reaso
           <h1 style="color: #dc3545; text-align: center;">RETRIEVAL NOTICE</h1>
           <p>Dear <b>${txDetails.ContactPerson}</b>,</p>
           <p>The following document(s) have been retrieved/pulled out from the Finance Office:</p>
-          
+
           <table style="width:100%;border-collapse:collapse;margin-top:20px;">
             <thead>
               <tr style="background-color:#f8d7da;color:#721c24;">
@@ -941,12 +930,13 @@ function sendPulledOutEmail(txDetails, docsList, signatureBlob, timestamp, reaso
           </div>
 
           <div style="margin-top:30px;border:1px solid #eee;padding:20px;text-align:center;">
-             <p style="font-weight:bold; color:#555;">AUTHENTICATED BY</p>
-             <div style="display:inline-block;padding:5px;border:1px dashed #ccc;">
-               <img src="cid:signatureImage" style="height:80px;">
-             </div>
-             <p style="margin-top:10px; font-weight:bold;">${pulledOutByName || "Authorized Personnel"}</p>
+             <p style="font-weight:bold; color:#555;">RETRIEVED BY</p>
+             <p style="margin:8px 0; font-size:18px; font-weight:bold; color:#dc3545;">${pulledOutByName || "Authorized Personnel"}</p>
              <p style="font-size:12px; color:#777;">Timestamp: ${formattedTimestamp}</p>
+          </div>
+
+          <div style="margin-top:20px;padding:15px 20px;background-color:#fff9db;border:1px solid #ffeeba;color:#856404;font-size:13px;border-radius:4px;">
+            <b>No reply needed.</b> If you did <u>not</u> authorize this retrieval, please reply to this email to dispute it. Otherwise, no action is required.
           </div>
         </div>
         <div style="background-color: #eeeeee; padding: 20px; text-align: center; color: #888;">
@@ -954,14 +944,13 @@ function sendPulledOutEmail(txDetails, docsList, signatureBlob, timestamp, reaso
         </div>
       </div>
     </div>`;
-  
+
   MailApp.sendEmail({
-    to: txDetails.ContactEmail, 
-    cc: finalCc, // ADDED HERE
-    subject: subject, 
-    htmlBody: html, 
-    name: 'Finance - Office of the Dept Manager',
-    inlineImages: { signatureImage: signatureBlob }
+    to: txDetails.ContactEmail,
+    cc: finalCc,
+    subject: subject,
+    htmlBody: html,
+    name: 'Finance - Office of the Dept Manager'
   });
 }
 
@@ -1050,4 +1039,372 @@ function sendRelogEmail(recipientData, docsList, notes, isLiaison) {
     htmlBody: html,
     name: 'Finance Department'
   });
+}
+
+
+/* =====================================================================
+ * MULTI-TRANSACTION ACTIONS (Dashboard checkbox selection)
+ * Each function operates on an explicit list of Documents-sheet row
+ * numbers, so a single action can span several transactions at once.
+ * ===================================================================== */
+
+/**
+ * Updates the status of the supplied document rows (across any number of
+ * transactions). Notifications mirror the single-transaction behaviour:
+ * each document owner is notified about their own documents, and the
+ * liaison of each affected transaction is notified about all of theirs.
+ * data: { rows: [Number], newStatus: String, notes: String }
+ */
+function processMultiStatusUpdate(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Documents');
+    const timestamp = new Date();
+    const affectedByTx = {};
+
+    (data.rows || []).forEach(function(r) {
+      const row = parseInt(r, 10);
+      if (!row || row < 2) return;
+      const currentStatus = sheet.getRange(row, 4).getValue();
+      const isActive = (currentStatus !== 'Claimed/Released' && currentStatus !== 'Pulled Out');
+      const isRelogging = (data.newStatus === 'Pending Signature');
+      if (!isActive && !isRelogging) return;
+
+      sheet.getRange(row, 4).setValue(data.newStatus);
+      sheet.getRange(row, 5).setValue(timestamp);
+      if (data.notes) sheet.getRange(row, 7).setValue(data.notes);
+
+      const txId = String(sheet.getRange(row, 1).getValue());
+      if (!affectedByTx[txId]) affectedByTx[txId] = [];
+      affectedByTx[txId].push({
+        Title: sheet.getRange(row, 3).getValue(),
+        Type: sheet.getRange(row, 2).getValue(),
+        Status: data.newStatus,
+        PrincipalName: sheet.getRange(row, 8).getValue(),
+        PrincipalEmail: sheet.getRange(row, 9).getValue()
+      });
+    });
+
+    let total = 0;
+    Object.keys(affectedByTx).forEach(function(txId) {
+      const docs = affectedByTx[txId];
+      total += docs.length;
+      const txDetails = getTransactionDetails(txId);
+      if (!txDetails) return;
+
+      const principalGroups = {};
+      docs.forEach(function(doc) {
+        const email = String(doc.PrincipalEmail || "").trim();
+        if (!email) return;
+        if (!principalGroups[email]) principalGroups[email] = { Name: doc.PrincipalName, Docs: [] };
+        principalGroups[email].Docs.push(doc);
+      });
+
+      Object.keys(principalGroups).forEach(function(email) {
+        const g = principalGroups[email];
+        const pDetails = { TransactionID: txId, ContactPerson: g.Name || "Document Owner", ContactEmail: email };
+        if (data.newStatus === 'Signed') sendReadyForPickupEmail(pDetails, g.Docs, data.notes, false);
+        else if (data.newStatus === 'For pick up, but with comments') sendPickupWithCommentsEmail(pDetails, g.Docs, data.notes, false);
+        else if (data.newStatus === 'Pending Signature') sendRelogEmail(pDetails, g.Docs, data.notes, false);
+      });
+
+      if (data.newStatus === 'Signed') sendReadyForPickupEmail(txDetails, docs, data.notes, true);
+      else if (data.newStatus === 'For pick up, but with comments') sendPickupWithCommentsEmail(txDetails, docs, data.notes, true);
+      else if (data.newStatus === 'Pending Signature') sendRelogEmail(txDetails, docs, data.notes, true);
+    });
+
+    if (total === 0) return "No documents were updated. They may already be closed.";
+    return `Success: Updated ${total} document(s) to "${data.newStatus}".`;
+  } catch (e) {
+    return "Error: " + e.message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Releases (marks as picked up) the supplied document rows to a single
+ * claimant, across any number of transactions. Signature-free.
+ * Email policy: each document owner gets a separate email containing only
+ * their own documents; the claimant gets one consolidated email.
+ * data: { rows: [Number], claimedBy: String }
+ */
+function processMultiClaim(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Documents');
+    const timestamp = new Date();
+    const directory = getDirectory();
+    const claimantKey = String(data.claimedBy || "").trim().toLowerCase();
+    const claimantObj = directory.find(function(d) { return String(d.name).trim().toLowerCase() === claimantKey; });
+    const claimantEmail = claimantObj ? claimantObj.email : "";
+    const affected = [];
+
+    (data.rows || []).forEach(function(r) {
+      const row = parseInt(r, 10);
+      if (!row || row < 2) return;
+      const status = sheet.getRange(row, 4).getValue();
+      if (status !== 'Signed' && status !== 'For pick up, but with comments') return;
+
+      sheet.getRange(row, 4).setValue('Claimed/Released');
+      sheet.getRange(row, 5).setValue(timestamp);
+      const existingNotes = sheet.getRange(row, 7).getValue();
+      const note = `[Claimed by: ${data.claimedBy}]`;
+      sheet.getRange(row, 7).setValue(existingNotes ? `${existingNotes} ${note}` : note);
+
+      affected.push({
+        Ref: String(sheet.getRange(row, 1).getValue()),
+        Title: sheet.getRange(row, 3).getValue(),
+        Type: sheet.getRange(row, 2).getValue(),
+        PrincipalName: sheet.getRange(row, 8).getValue(),
+        PrincipalEmail: sheet.getRange(row, 9).getValue()
+      });
+    });
+
+    if (affected.length === 0) {
+      return "No eligible documents found. Only documents marked 'Signed' or 'For pick up' can be picked up.";
+    }
+
+    // Each owner: a separate email with only their own documents.
+    const ownerGroups = {};
+    affected.forEach(function(doc) {
+      const email = String(doc.PrincipalEmail || "").trim();
+      if (!email || email.toLowerCase() === String(claimantEmail).toLowerCase()) return;
+      if (!ownerGroups[email]) ownerGroups[email] = { name: doc.PrincipalName || "Document Owner", docs: [] };
+      ownerGroups[email].docs.push(doc);
+    });
+    Object.keys(ownerGroups).forEach(function(email) {
+      sendPickupConfirmationEmail({ name: ownerGroups[email].name, email: email }, ownerGroups[email].docs, data.claimedBy, timestamp, false);
+    });
+
+    // The claimant: one consolidated email covering everything.
+    if (claimantEmail) {
+      sendPickupConfirmationEmail({ name: data.claimedBy, email: claimantEmail }, affected, data.claimedBy, timestamp, true);
+    }
+
+    const txCount = Object.keys(affected.reduce(function(m, d) { m[d.Ref] = 1; return m; }, {})).length;
+    return `Success: Released ${affected.length} document(s) across ${txCount} transaction(s) to ${data.claimedBy}.`;
+  } catch (e) {
+    return "Error: " + e.message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Pulls out the supplied document rows across any number of transactions.
+ * Signature-free. Email policy mirrors processMultiClaim.
+ * data: { rows: [Number], pulledOutBy: String, comments: String }
+ */
+function processMultiPullOut(data) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Documents');
+    const timestamp = new Date();
+    const directory = getDirectory();
+    const pullerName = data.pulledOutBy || "Unknown";
+    const pullerKey = String(pullerName).trim().toLowerCase();
+    const pullerObj = directory.find(function(d) { return String(d.name).trim().toLowerCase() === pullerKey; });
+    const pullerEmail = pullerObj ? pullerObj.email : "";
+    const affected = [];
+
+    (data.rows || []).forEach(function(r) {
+      const row = parseInt(r, 10);
+      if (!row || row < 2) return;
+      const status = sheet.getRange(row, 4).getValue();
+      if (status === 'Claimed/Released' || status === 'Pulled Out') return;
+
+      sheet.getRange(row, 4).setValue('Pulled Out');
+      sheet.getRange(row, 5).setValue(timestamp);
+      const existingNotes = sheet.getRange(row, 7).getValue();
+      const note = `${data.comments} [Pulled out by: ${pullerName}]`;
+      sheet.getRange(row, 7).setValue(existingNotes ? `${existingNotes} ${note}` : note);
+
+      affected.push({
+        Ref: String(sheet.getRange(row, 1).getValue()),
+        Title: sheet.getRange(row, 3).getValue(),
+        Type: sheet.getRange(row, 2).getValue(),
+        PrincipalName: sheet.getRange(row, 8).getValue(),
+        PrincipalEmail: sheet.getRange(row, 9).getValue()
+      });
+    });
+
+    if (affected.length === 0) return "No eligible documents found to pull out.";
+
+    const ownerGroups = {};
+    affected.forEach(function(doc) {
+      const email = String(doc.PrincipalEmail || "").trim();
+      if (!email || email.toLowerCase() === String(pullerEmail).toLowerCase()) return;
+      if (!ownerGroups[email]) ownerGroups[email] = { name: doc.PrincipalName || "Document Owner", docs: [] };
+      ownerGroups[email].docs.push(doc);
+    });
+    Object.keys(ownerGroups).forEach(function(email) {
+      sendPullOutConfirmationEmail({ name: ownerGroups[email].name, email: email }, ownerGroups[email].docs, pullerName, timestamp, data.comments, false);
+    });
+
+    if (pullerEmail) {
+      sendPullOutConfirmationEmail({ name: pullerName, email: pullerEmail }, affected, pullerName, timestamp, data.comments, true);
+    }
+
+    const txCount = Object.keys(affected.reduce(function(m, d) { m[d.Ref] = 1; return m; }, {})).length;
+    return `Success: Pulled out ${affected.length} document(s) across ${txCount} transaction(s).`;
+  } catch (e) {
+    return "Error: " + e.message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Pickup confirmation email (signature-free). Shows the main-workflow
+ * reference number per document. isPicker=true => consolidated copy for
+ * the person who picked up; false => owner copy (their documents only).
+ */
+function sendPickupConfirmationEmail(recipient, docsList, claimantName, timestamp, isPicker) {
+  try {
+    if (!recipient || !recipient.email) return;
+    const formattedTimestamp = timestamp.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+    const subject = isPicker
+      ? `[Finance] Documents Picked Up - ${docsList.length} document(s)`
+      : `[Finance] Your Document Has Been Picked Up`;
+
+    const rows = docsList.map(function(d) {
+      return `<tr>
+         <td style="padding:10px;border-bottom:1px solid #eee;font-weight:bold;color:#1C2790;">${d.Ref || ""}</td>
+         <td style="padding:10px;border-bottom:1px solid #eee;">${d.Title}</td>
+         <td style="padding:10px;border-bottom:1px solid #eee;color:#555;">${d.Type}</td>
+       </tr>`;
+    }).join('');
+
+    const introText = isPicker
+      ? `This email confirms that you picked up the following document(s) from the Finance Office:`
+      : `This email confirms that <b>${claimantName}</b> picked up the following document(s) belonging to you from the Finance Office:`;
+
+    const html = `
+      <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
+        <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #1C2790; padding: 30px; text-align: center;">
+            <img src="https://i.imgur.com/jaEbfAR.png" width="400">
+          </div>
+          <div style="padding: 40px; border-top: 6px solid #198754;">
+            <h1 style="color: #198754; text-align: center;">DOCUMENTS PICKED UP</h1>
+            <p>Dear <b>${recipient.name}</b>,</p>
+            <p>${introText}</p>
+
+            <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+              <thead>
+                <tr style="background-color:#f2f4f8;">
+                  <th style="padding:10px; text-align:left;">Reference #</th>
+                  <th style="padding:10px; text-align:left;">Title</th>
+                  <th style="padding:10px; text-align:left;">Type</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+
+            <div style="margin-top:30px;border:1px solid #eee;padding:20px;text-align:center;">
+              <p style="font-weight:bold; color:#555;">RECEIVED BY</p>
+              <p style="margin:8px 0; font-size:18px; font-weight:bold; color:#198754;">${claimantName}</p>
+              <p style="font-size:12px; color:#777;">Picked up on: ${formattedTimestamp}</p>
+            </div>
+
+            <div style="margin-top:20px;padding:15px 20px;background-color:#fff9db;border:1px solid #ffeeba;color:#856404;font-size:13px;border-radius:4px;">
+              <b>No reply needed.</b> If you did <u>not</u> pick up these documents, or did not authorize <b>${claimantName}</b> to pick them up on your behalf, please reply to this email to dispute it. Otherwise, no action is required &mdash; this serves as your confirmation of receipt.
+            </div>
+          </div>
+          <div style="background-color: #eeeeee; padding: 20px; text-align: center; color: #888;">
+            &copy; Finance Department - Office of the Dept Manager.
+          </div>
+        </div>
+      </div>`;
+
+    MailApp.sendEmail({
+      to: recipient.email,
+      subject: subject,
+      htmlBody: html,
+      name: 'Finance - Office of the Dept Manager'
+    });
+  } catch (e) {
+    console.error("sendPickupConfirmationEmail failed: " + e.toString());
+  }
+}
+
+/**
+ * Pull-out confirmation email (signature-free). isPuller=true => the
+ * person who pulled the documents out; false => owner copy.
+ */
+function sendPullOutConfirmationEmail(recipient, docsList, pullerName, timestamp, reason, isPuller) {
+  try {
+    if (!recipient || !recipient.email) return;
+    const formattedTimestamp = timestamp.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+    const subject = isPuller
+      ? `[Finance] Documents Pulled Out - ${docsList.length} document(s)`
+      : `[Finance] Your Document Has Been Pulled Out`;
+
+    const rows = docsList.map(function(d) {
+      return `<tr>
+         <td style="padding:10px;border-bottom:1px solid #f8d7da;font-weight:bold;color:#721c24;">${d.Ref || ""}</td>
+         <td style="padding:10px;border-bottom:1px solid #f8d7da;">${d.Title}</td>
+         <td style="padding:10px;border-bottom:1px solid #f8d7da;color:#555;">${d.Type}</td>
+       </tr>`;
+    }).join('');
+
+    const introText = isPuller
+      ? `This email confirms that you pulled out the following document(s) from the Finance Office:`
+      : `This email confirms that <b>${pullerName}</b> pulled out the following document(s) belonging to you from the Finance Office:`;
+
+    const html = `
+      <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
+        <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #1C2790; padding: 30px; text-align: center;">
+            <img src="https://i.imgur.com/jaEbfAR.png" width="400">
+          </div>
+          <div style="padding: 40px; border-top: 6px solid #dc3545;">
+            <h1 style="color: #dc3545; text-align: center;">DOCUMENTS PULLED OUT</h1>
+            <p>Dear <b>${recipient.name}</b>,</p>
+            <p>${introText}</p>
+
+            <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+              <thead>
+                <tr style="background-color:#f8d7da;color:#721c24;">
+                  <th style="padding:10px; text-align:left;">Reference #</th>
+                  <th style="padding:10px; text-align:left;">Title</th>
+                  <th style="padding:10px; text-align:left;">Type</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+
+            <div style="margin-top:25px;padding:20px;background-color:#fff5f5;border:1px solid #f5c6cb;color:#721c24;">
+              <b>Reason for Pull Out:</b><br>"${reason}"
+            </div>
+
+            <div style="margin-top:25px;border:1px solid #eee;padding:20px;text-align:center;">
+              <p style="font-weight:bold; color:#555;">RETRIEVED BY</p>
+              <p style="margin:8px 0; font-size:18px; font-weight:bold; color:#dc3545;">${pullerName}</p>
+              <p style="font-size:12px; color:#777;">Pulled out on: ${formattedTimestamp}</p>
+            </div>
+
+            <div style="margin-top:20px;padding:15px 20px;background-color:#fff9db;border:1px solid #ffeeba;color:#856404;font-size:13px;border-radius:4px;">
+              <b>No reply needed.</b> If you did <u>not</u> authorize this retrieval, please reply to this email to dispute it. Otherwise, no action is required.
+            </div>
+          </div>
+          <div style="background-color: #eeeeee; padding: 20px; text-align: center; color: #888;">
+            &copy; Finance Department - Office of the Dept Manager.
+          </div>
+        </div>
+      </div>`;
+
+    MailApp.sendEmail({
+      to: recipient.email,
+      subject: subject,
+      htmlBody: html,
+      name: 'Finance - Office of the Dept Manager'
+    });
+  } catch (e) {
+    console.error("sendPullOutConfirmationEmail failed: " + e.toString());
+  }
 }

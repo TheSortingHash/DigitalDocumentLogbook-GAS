@@ -48,24 +48,42 @@
         .status { padding: 4px 8px; border-radius: 12px; color: white; font-weight: bold; font-size: 11px; text-align: center; display: inline-block; }
         .loader { text-align: center; padding: 50px; font-size: 18px; color: #555; }
 
-        /* Multi-select for internal routing */
+        /* Multi-select action bar */
         .doc-checkbox { width: 16px; height: 16px; cursor: pointer; }
         tr.doc-selected { background-color: #eef3ff !important; }
         .selection-bar {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-            background-color: #1C2790; color: #fff; padding: 12px 20px;
-            border-radius: 50px; box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-            display: none; align-items: center; gap: 14px; z-index: 1000;
-            font-size: 14px;
+            background-color: #1C2790; color: #fff; padding: 12px 18px;
+            border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            display: none; align-items: center; gap: 10px; z-index: 1000;
+            font-size: 14px; flex-wrap: wrap; justify-content: center; max-width: 92vw;
         }
         .selection-bar.visible { display: flex; }
-        .selection-bar .count { font-weight: bold; }
+        .selection-bar .count { font-weight: bold; font-size: 16px; }
         .selection-bar button {
-            border: none; padding: 8px 16px; border-radius: 25px;
-            cursor: pointer; font-weight: bold; font-size: 13px;
+            border: none; padding: 9px 14px; border-radius: 6px;
+            cursor: pointer; font-weight: bold; font-size: 13px; color: #fff;
         }
-        .selection-bar .route-btn { background-color: #198754; color: #fff; }
-        .selection-bar .clear-btn { background-color: rgba(255,255,255,0.18); color: #fff; }
+        .bar-btn.signed  { background-color: #198754; }
+        .bar-btn.pickup  { background-color: #0d6efd; }
+        .bar-btn.pullout { background-color: #dc3545; }
+        .bar-btn.route   { background-color: #6f42c1; }
+        .bar-btn.clear   { background-color: rgba(255,255,255,0.18); }
+
+        /* Action modals */
+        .modal { display: none; position: fixed; z-index: 1100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fff; margin: 8% auto; padding: 25px; border-radius: 8px; width: 90%; max-width: 480px; position: relative; }
+        .modal-content h3 { margin-top: 0; color: #1C2790; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
+        .modal label { display: block; margin: 12px 0 5px; font-weight: bold; color: #555; }
+        .modal select, .modal textarea, .modal input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .modal .form-group { position: relative; margin-bottom: 10px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .modal-actions button { padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; color: #fff; font-weight: bold; }
+        .modal-note { font-size: 12px; color: #666; margin-top: 8px; }
+        .autocomplete-items { position: absolute; border: 1px solid #d4d4d4; background: #fff; z-index: 99; left: 0; right: 0; max-height: 180px; overflow-y: auto; }
+        .autocomplete-items div { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .autocomplete-items div:hover { background: #e9e9e9; }
 
         /* --- NEW: Directory Upload Styles --- */
         #directory-container { display: none; padding: 20px; border: 2px dashed #ccc; border-radius: 8px; text-align: center; background-color: #fafafa; }
@@ -136,21 +154,83 @@
     </div>
 
     <div id="selectionBar" class="selection-bar">
-        <span><span class="count" id="selectionCount">0</span> document(s) selected</span>
-        <button class="route-btn" onclick="routeSelectedToInternal()">Route to Internal Logbook</button>
-        <button class="clear-btn" onclick="clearDocSelection()">Clear</button>
+        <span><span class="count" id="selectionCount">0</span> selected</span>
+        <button class="bar-btn signed" onclick="openSignedModal()">Update Status</button>
+        <button class="bar-btn pickup" onclick="openPickupModal()">Mark as Picked Up</button>
+        <button class="bar-btn pullout" onclick="openPullOutModal()">Pull Out</button>
+        <button class="bar-btn route" onclick="routeSelectedToInternal()">Route to Internal Logbook</button>
+        <button class="bar-btn clear" onclick="clearDocSelection()">Clear</button>
+    </div>
+
+    <div id="signedModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('signedModal')">&times;</span>
+            <h3>Update Status of Selected Documents</h3>
+            <p class="modal-note" id="signedModalCount"></p>
+            <label>New Status</label>
+            <select id="multiStatus">
+                <option value="Signed">Signed (Ready for Pickup)</option>
+                <option value="For pick up, but with comments">For pick up, but with comments</option>
+                <option value="Pending Signature">Pending Signature</option>
+            </select>
+            <label>Remarks / Notes (Optional)</label>
+            <textarea id="multiStatusNotes" rows="3"></textarea>
+            <p class="modal-note">Documents already Claimed/Released or Pulled Out are skipped (unless setting back to Pending Signature). Owners and liaisons are notified by email.</p>
+            <div class="modal-actions">
+                <button style="background-color:#198754;" onclick="submitMultiStatus()">Confirm Update</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pickupModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('pickupModal')">&times;</span>
+            <h3>Mark Selected Documents as Picked Up</h3>
+            <p class="modal-note" id="pickupModalCount"></p>
+            <div class="form-group">
+                <label>Picked Up By (Name)</label>
+                <input type="text" id="pickupClaimedBy" placeholder="Start typing name..." autocomplete="off">
+                <div class="autocomplete-items"></div>
+            </div>
+            <p class="modal-note">Only documents marked "Signed" or "For pick up" are released; others are skipped. No signature required &mdash; a confirmation email is sent to each document owner and to the person who picked up.</p>
+            <div class="modal-actions">
+                <button style="background-color:#0d6efd;" onclick="submitMultiPickup()">Confirm Pickup</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pullOutModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('pullOutModal')">&times;</span>
+            <h3>Pull Out Selected Documents</h3>
+            <p class="modal-note" id="pullOutModalCount"></p>
+            <div class="form-group">
+                <label>Pulled Out By (Name)</label>
+                <input type="text" id="pullOutBy" placeholder="Start typing name..." autocomplete="off">
+                <div class="autocomplete-items"></div>
+            </div>
+            <label>Reason for Pull Out (Required)</label>
+            <textarea id="pullOutReason" rows="2"></textarea>
+            <p class="modal-note">Documents already Claimed/Released or Pulled Out are skipped. No signature required.</p>
+            <div class="modal-actions">
+                <button style="background-color:#dc3545;" onclick="submitMultiPullOut()">Confirm Pull Out</button>
+            </div>
+        </div>
     </div>
 
     <script>
         let ACTIVE_TRANSACTIONS = [];
         let ARCHIVED_TRANSACTIONS = [];
         let INTERNAL_LOG_DATA = [];
+        let DIRECTORY = [];
         let APP_URL = '';
         let CURRENT_TAB = 'active';
         // key: `${txId}::${rowNumber}` -> { txId, rowNumber, title, type }
         const SELECTED_DOCS = new Map();
 
         function selectionKey(txId, rowNumber) { return `${txId}::${rowNumber}`; }
+        function getSelectedRows() { return Array.from(SELECTED_DOCS.values()).map(d => d.rowNumber); }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
         function updateSelectionBar() {
             const bar = document.getElementById('selectionBar');
@@ -169,12 +249,52 @@
                 SELECTED_DOCS.delete(key);
                 if (row) row.classList.remove('doc-selected');
             }
+            syncTxCheckbox(checkbox, txId);
             updateSelectionBar();
+        }
+
+        // Selecting a transaction selects/deselects all of its documents.
+        function toggleTransactionSelection(checkbox, txId) {
+            const tx = ACTIVE_TRANSACTIONS.find(t => String(t.TransactionID) === String(txId));
+            if (!tx) return;
+            const checked = checkbox.checked;
+            checkbox.indeterminate = false;
+            tx.documents.forEach(doc => {
+                const key = selectionKey(txId, doc.rowNumber);
+                if (checked) {
+                    SELECTED_DOCS.set(key, { txId: txId, rowNumber: doc.rowNumber, title: doc.DocumentTitle, type: doc.DocumentType });
+                } else {
+                    SELECTED_DOCS.delete(key);
+                }
+            });
+            // Sync any per-document checkboxes that are currently rendered.
+            const detailsRow = checkbox.closest('tr') ? checkbox.closest('tr').nextElementSibling : null;
+            if (detailsRow) {
+                detailsRow.querySelectorAll('.doc-checkbox').forEach(cb => {
+                    cb.checked = checked;
+                    const r = cb.closest('tr');
+                    if (r) r.classList.toggle('doc-selected', checked);
+                });
+            }
+            updateSelectionBar();
+        }
+
+        // Reflects how many of a transaction's documents are selected on its row checkbox.
+        function syncTxCheckbox(docCheckbox, txId) {
+            const detailsRow = docCheckbox.closest('.details-row');
+            const mainRow = detailsRow ? detailsRow.previousElementSibling : null;
+            const txCb = mainRow ? mainRow.querySelector('.tx-checkbox') : null;
+            if (!txCb) return;
+            const tx = ACTIVE_TRANSACTIONS.find(t => String(t.TransactionID) === String(txId));
+            if (!tx) return;
+            const selCount = tx.documents.filter(d => SELECTED_DOCS.has(selectionKey(txId, d.rowNumber))).length;
+            txCb.checked = selCount > 0 && selCount === tx.documents.length;
+            txCb.indeterminate = selCount > 0 && selCount < tx.documents.length;
         }
 
         function clearDocSelection() {
             SELECTED_DOCS.clear();
-            document.querySelectorAll('.doc-checkbox').forEach(cb => { cb.checked = false; });
+            document.querySelectorAll('.doc-checkbox').forEach(cb => { cb.checked = false; cb.indeterminate = false; });
             document.querySelectorAll('tr.doc-selected').forEach(r => r.classList.remove('doc-selected'));
             updateSelectionBar();
         }
@@ -192,12 +312,100 @@
             window.open(url, '_blank');
         }
 
+        function openSignedModal() {
+            if (SELECTED_DOCS.size === 0) return;
+            document.getElementById('signedModalCount').textContent = `${SELECTED_DOCS.size} document(s) selected.`;
+            document.getElementById('multiStatus').value = 'Signed';
+            document.getElementById('multiStatusNotes').value = '';
+            document.getElementById('signedModal').style.display = 'block';
+        }
+
+        function openPickupModal() {
+            if (SELECTED_DOCS.size === 0) return;
+            document.getElementById('pickupModalCount').textContent = `${SELECTED_DOCS.size} document(s) selected.`;
+            document.getElementById('pickupClaimedBy').value = '';
+            document.getElementById('pickupModal').style.display = 'block';
+        }
+
+        function openPullOutModal() {
+            if (SELECTED_DOCS.size === 0) return;
+            document.getElementById('pullOutModalCount').textContent = `${SELECTED_DOCS.size} document(s) selected.`;
+            document.getElementById('pullOutBy').value = '';
+            document.getElementById('pullOutReason').value = '';
+            document.getElementById('pullOutModal').style.display = 'block';
+        }
+
+        function submitMultiStatus() {
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Saving...';
+            const data = {
+                rows: getSelectedRows(),
+                newStatus: document.getElementById('multiStatus').value,
+                notes: document.getElementById('multiStatusNotes').value
+            };
+            google.script.run.withSuccessHandler(onActionComplete).withFailureHandler(onActionFail)
+                             .processMultiStatusUpdate(data);
+        }
+
+        function submitMultiPickup() {
+            const claimedBy = document.getElementById('pickupClaimedBy').value.trim();
+            if (!claimedBy) { alert('Please enter who picked up the documents.'); return; }
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Processing...';
+            google.script.run.withSuccessHandler(onActionComplete).withFailureHandler(onActionFail)
+                             .processMultiClaim({ rows: getSelectedRows(), claimedBy: claimedBy });
+        }
+
+        function submitMultiPullOut() {
+            const pulledOutBy = document.getElementById('pullOutBy').value.trim();
+            const reason = document.getElementById('pullOutReason').value.trim();
+            if (!pulledOutBy) { alert('Please enter who is pulling out the documents.'); return; }
+            if (!reason) { alert('Please provide a reason for the pull out.'); return; }
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Processing...';
+            google.script.run.withSuccessHandler(onActionComplete).withFailureHandler(onActionFail)
+                             .processMultiPullOut({ rows: getSelectedRows(), pulledOutBy: pulledOutBy, comments: reason });
+        }
+
+        function onActionComplete(msg) {
+            alert(msg);
+            location.reload();
+        }
+
+        function onActionFail(err) {
+            alert('Error: ' + (err && err.message ? err.message : err));
+            location.reload();
+        }
+
+        function attachAutocomplete(inp) {
+            if (!inp) return;
+            const list = inp.parentNode.querySelector('.autocomplete-items');
+            if (!list) return;
+            inp.addEventListener('input', function() {
+                const val = this.value;
+                list.innerHTML = '';
+                if (!val) return;
+                DIRECTORY.filter(d => d.name && d.name.toLowerCase().includes(val.toLowerCase()))
+                         .slice(0, 6)
+                         .forEach(m => {
+                    const div = document.createElement('div');
+                    div.textContent = m.name;
+                    div.onclick = function() { inp.value = m.name; list.innerHTML = ''; };
+                    list.appendChild(div);
+                });
+            });
+            document.addEventListener('click', function(e) { if (e.target !== inp) list.innerHTML = ''; });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             google.script.run.withSuccessHandler(initializeDashboard).getDashboardData();
+            attachAutocomplete(document.getElementById('pickupClaimedBy'));
+            attachAutocomplete(document.getElementById('pullOutBy'));
         });
 
         function initializeDashboard(returnData) {
             APP_URL = returnData.appUrl;
+            DIRECTORY = returnData.directory || [];
             document.getElementById('addSubmissionBtn').href = `${APP_URL}?page=submit`;
             document.getElementById('internalRouteBtn').href = `${APP_URL}?page=internal-log`;
 
@@ -348,9 +556,13 @@
         }
 
         function buildTransactionTable(transactions) {
+            const showCheckboxes = (CURRENT_TAB === 'active');
+            const colCount = showCheckboxes ? 8 : 7;
+
             const thead = document.getElementById('tableHead');
             thead.innerHTML = `
                 <tr>
+                    ${showCheckboxes ? '<th style="width:30px; text-align:center;">&#10003;</th>' : ''}
                     <th style="width: 30px;"></th>
                     <th>Transaction ID</th>
                     <th>Liaison / Contact</th>
@@ -365,20 +577,23 @@
             tableBody.innerHTML = "";
 
             if (!transactions || transactions.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No transactions found.</td></tr>';
+                tableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;">No transactions found.</td></tr>`;
                 loader.style.display = 'none';
                 return;
             }
-
-            const showCheckboxes = (CURRENT_TAB === 'active');
 
             transactions.forEach(tx => {
                 const manageUrl = `${APP_URL}?action=update&id=${tx.TransactionID}`;
                 const printUrl = `${APP_URL}?action=print-slip&id=${tx.TransactionID}`;
 
+                const txSelectCell = showCheckboxes
+                    ? `<td style="text-align:center;"><input type="checkbox" class="tx-checkbox" onchange="toggleTransactionSelection(this, '${tx.TransactionID}')"></td>`
+                    : '';
+
                 let mainRow = document.createElement('tr');
                 mainRow.className = 'main-row';
                 mainRow.innerHTML = `
+                    ${txSelectCell}
                     <td onclick="toggleDetails(this)" class="toggle-btn">+</td>
                     <td><b>${tx.TransactionID}</b></td>
                     <td>${tx.ContactPerson}</td>
@@ -430,7 +645,7 @@
 
                 const selectHeader = showCheckboxes ? '<th style="width:30px;"></th>' : '';
                 detailsRow.innerHTML = `
-                    <td colspan="7">
+                    <td colspan="${colCount}">
                         <div class="details-container">
                             <table class="sub-table">
                                 <thead>
@@ -451,6 +666,16 @@
 
                 tableBody.appendChild(mainRow);
                 tableBody.appendChild(detailsRow);
+
+                // Restore the transaction checkbox state from the current selection.
+                if (showCheckboxes) {
+                    const txCb = mainRow.querySelector('.tx-checkbox');
+                    if (txCb) {
+                        const selCount = tx.documents.filter(d => SELECTED_DOCS.has(selectionKey(tx.TransactionID, d.rowNumber))).length;
+                        txCb.checked = selCount > 0 && selCount === tx.documents.length;
+                        txCb.indeterminate = selCount > 0 && selCount < tx.documents.length;
+                    }
+                }
             });
             loader.style.display = 'none';
         }

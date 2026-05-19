@@ -3,7 +3,6 @@
   <head>
     <base target="_top">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <style>
       body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
       .header { background-color: #1C2790; padding: 15px; text-align: center; color: white; }
@@ -32,11 +31,8 @@
       .form-group { margin-bottom: 15px; position: relative; } 
       label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
       select, textarea, input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-      .signature-pad-container { width: 100%; height: 180px; border: 2px dashed #ccc; margin-bottom: 10px; }
-      canvas { width: 100%; height: 100%; }
       .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
       .btn-confirm { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; }
-      .btn-clear { background-color: #6c757d; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; color: white; }
       .message { padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; display: none; margin-top: 15px; }
       .success { background-color: #d4edda; color: #155724; }
       
@@ -114,9 +110,8 @@
                 <div class="autocomplete-items"></div>
             </div>
 
-            <p>Sign below to acknowledge receipt:</p>
-            <div class="signature-pad-container"><canvas id="release-sig-pad"></canvas></div>
-            <div class="modal-actions"><button class="btn-clear" onclick="clearPad('release')">Clear</button><button class="btn-confirm" style="background-color: #198754;" onclick="submitRelease()">Confirm Release</button></div>
+            <p style="font-size:13px;color:#666;">No signature required. A confirmation email will be sent to the document owner(s) and the person who picked up.</p>
+            <div class="modal-actions"><button class="btn-confirm" style="background-color: #198754;" onclick="submitRelease()">Confirm Release</button></div>
         </div>
     </div>
     
@@ -137,10 +132,8 @@
                 <textarea id="pullOutComments" rows="2"></textarea>
             </div>
             
-            <p>Sign below to confirm:</p>
-            <div class="signature-pad-container"><canvas id="pullout-sig-pad"></canvas></div>
-            
-            <div class="modal-actions"><button class="btn-clear" onclick="clearPad('pullout')">Clear</button><button class="btn-confirm" style="background-color: #dc3545;" onclick="submitPullOut()">Confirm Pull Out</button></div>
+            <p style="font-size:13px;color:#666;">No signature required. A confirmation email will be sent to the document owner(s).</p>
+            <div class="modal-actions"><button class="btn-confirm" style="background-color: #dc3545;" onclick="submitPullOut()">Confirm Pull Out</button></div>
         </div>
     </div>
 
@@ -151,8 +144,6 @@
       
       const contactPerson = details.ContactPerson;
       const contactEmail = details.ContactEmail;
-      
-      let releaseSigPad, pullOutSigPad;
 
       window.onload = function() {
           document.getElementById('dispTxId').innerText = transactionId;
@@ -200,27 +191,24 @@
       }
 
       function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-      function clearPad(type) { if(type === 'release') releaseSigPad.clear(); if(type === 'pullout') pullOutSigPad.clear(); }
 
-      function openUpdateModal(row, title) { 
+      function openUpdateModal(row, title) {
           document.getElementById('updateDocRow').value = row; 
           document.getElementById('isBatchUpdate').value = "false";
           document.getElementById('updateModalTitle').innerText = "Update: " + title; 
           document.getElementById('updateModal').style.display = 'block'; 
       }
-      function openReleaseModal(row, title) { 
-          document.getElementById('releaseDocRow').value = row; 
-          document.getElementById('releaseModalTitle').innerText = "Release: " + title; 
-          document.getElementById('releaseModal').style.display = 'block'; 
-          if(!releaseSigPad) { const c = document.getElementById('release-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; releaseSigPad = new SignaturePad(c); } releaseSigPad.clear(); 
-          document.getElementById('claimedBy').value = ""; 
+      function openReleaseModal(row, title) {
+          document.getElementById('releaseDocRow').value = row;
+          document.getElementById('releaseModalTitle').innerText = "Release: " + title;
+          document.getElementById('releaseModal').style.display = 'block';
+          document.getElementById('claimedBy').value = "";
       }
-      function openPullOutModal(row, title) { 
-          document.getElementById('pullOutDocRow').value = row; 
-          document.getElementById('pullOutModalTitle').innerText = "Pull Out: " + title; 
-          document.getElementById('pullOutModal').style.display = 'block'; 
-          if(!pullOutSigPad) { const c = document.getElementById('pullout-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; pullOutSigPad = new SignaturePad(c); } pullOutSigPad.clear(); 
-          document.getElementById('pulledOutBy').value = ""; // Reset Name
+      function openPullOutModal(row, title) {
+          document.getElementById('pullOutDocRow').value = row;
+          document.getElementById('pullOutModalTitle').innerText = "Pull Out: " + title;
+          document.getElementById('pullOutModal').style.display = 'block';
+          document.getElementById('pulledOutBy').value = "";
           document.getElementById('pullOutComments').value = "";
       }
       function openBatchUpdateModal() {
@@ -233,17 +221,15 @@
           document.getElementById('updateModal').style.display = 'block';
       }
       function openBatchReleaseModal() {
-          document.getElementById('releaseDocRow').value = ""; 
+          document.getElementById('releaseDocRow').value = "";
           document.getElementById('releaseModalTitle').innerText = "Batch Release (All Signed Documents)";
           document.getElementById('releaseModal').style.display = 'block';
-          if(!releaseSigPad) { const c = document.getElementById('release-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; releaseSigPad = new SignaturePad(c); } releaseSigPad.clear(); 
           document.getElementById('claimedBy').value = "";
       }
       function openBatchPullOutModal() {
-          document.getElementById('pullOutDocRow').value = ""; 
+          document.getElementById('pullOutDocRow').value = "";
           document.getElementById('pullOutModalTitle').innerText = "Batch Pull Out (All Active Documents)";
           document.getElementById('pullOutModal').style.display = 'block';
-          if(!pullOutSigPad) { const c = document.getElementById('pullout-sig-pad'); c.width = c.offsetWidth; c.height = c.offsetHeight; pullOutSigPad = new SignaturePad(c); } pullOutSigPad.clear(); 
           document.getElementById('pulledOutBy').value = "";
           document.getElementById('pullOutComments').value = "";
       }
@@ -255,51 +241,47 @@
           google.script.run.withSuccessHandler(onSuccess).updateDocumentStatus(data); 
       }
 
-      function submitRelease() { 
-          if(releaseSigPad.isEmpty()) return alert("Signature required."); 
+      function submitRelease() {
           const claimedBy = document.getElementById('claimedBy').value;
           if(!claimedBy) return alert("Please enter who claimed the document.");
 
-          const btn = event.target; btn.disabled = true; btn.innerText = "Processing..."; 
-          const row = document.getElementById('releaseDocRow').value; 
-          const isBatch = row === ""; 
+          const btn = event.target; btn.disabled = true; btn.innerText = "Processing...";
+          const row = document.getElementById('releaseDocRow').value;
+          const isBatch = row === "";
 
-          const data = { 
-              transactionId: transactionId, 
-              documentRow: row, 
+          const data = {
+              transactionId: transactionId,
+              documentRow: row,
               isBatch: isBatch,
-              signature: releaseSigPad.toDataURL(), 
-              claimedBy: claimedBy, // Passed Name
-              contactPerson: contactPerson, 
-              contactEmail: contactEmail 
-          }; 
+              claimedBy: claimedBy,
+              contactPerson: contactPerson,
+              contactEmail: contactEmail
+          };
           google.script.run.withSuccessHandler(onSuccess).processClaim(data);
       }
 
-      function submitPullOut() { 
-          const comments = document.getElementById('pullOutComments').value; 
+      function submitPullOut() {
+          const comments = document.getElementById('pullOutComments').value;
           const pulledOutBy = document.getElementById('pulledOutBy').value;
 
           if(!pulledOutBy) return alert("Please enter who is pulling out the document.");
-          if(!comments) return alert("Reason required."); 
-          if(pullOutSigPad.isEmpty()) return alert("Signature required."); 
-          
-          const btn = event.target; btn.disabled = true; btn.innerText = "Processing..."; 
-          
+          if(!comments) return alert("Reason required.");
+
+          const btn = event.target; btn.disabled = true; btn.innerText = "Processing...";
+
           const row = document.getElementById('pullOutDocRow').value;
           const isBatch = row === "";
 
-          const data = { 
-              transactionId: transactionId, 
-              documentRow: row, 
+          const data = {
+              transactionId: transactionId,
+              documentRow: row,
               isBatch: isBatch,
-              signature: pullOutSigPad.toDataURL(), 
-              comments: comments, 
-              pulledOutBy: pulledOutBy, // NEW: Passed Name
-              contactPerson: contactPerson, 
-              contactEmail: contactEmail 
-          }; 
-          google.script.run.withSuccessHandler(onSuccess).processPullOut(data); 
+              comments: comments,
+              pulledOutBy: pulledOutBy,
+              contactPerson: contactPerson,
+              contactEmail: contactEmail
+          };
+          google.script.run.withSuccessHandler(onSuccess).processPullOut(data);
       }
 
       function onSuccess(msg) { 
