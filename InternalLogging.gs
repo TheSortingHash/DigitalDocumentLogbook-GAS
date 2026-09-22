@@ -1,32 +1,20 @@
 
 
 /**
- * Sends email for Internal Handover.
- * Updated to handle BATCH documents (Array) and safer image attachment.
+ * Sends email for Internal Handover. Signature-free: confirmation is
+ * name-based. Recipients only reply if they dispute custody.
  */
-function sendRoutedEmail(recipientData, docsList, signatureBlob, logID, timestamp) {
+function sendRoutedEmail(recipientData, docsList, logID, timestamp) {
   try {
     const subject = `[Finance] Documents Routed - Ref: ${logID}`;
     const formattedTimestamp = timestamp.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
 
-    // 1. Build Table Rows
-    const rows = docsList.map(d => 
+    const rows = docsList.map(d =>
       `<tr>
          <td style="padding:12px;border-bottom:1px solid #eee;">${d.Title}</td>
          <td style="padding:12px;border-bottom:1px solid #eee;">${d.Type}</td>
        </tr>`
     ).join('');
-
-    // 2. Handle Signature Safety
-    let signatureHtml = '';
-    let inlineImagesObj = {};
-
-    if (signatureBlob) {
-      signatureHtml = `<img src="cid:signatureImage" style="height:80px;">`;
-      inlineImagesObj['signatureImage'] = signatureBlob;
-    } else {
-      signatureHtml = `<p style="color:#888; font-style:italic;">(Digital Signature Pending)</p>`;
-    }
 
     const html = `
       <div style="background-color: #f4f6f8; padding: 40px 0; font-family: Arial, sans-serif;">
@@ -38,7 +26,7 @@ function sendRoutedEmail(recipientData, docsList, signatureBlob, logID, timestam
             <h1 style="color: #1C2790; text-align: center;">DOCUMENTS ROUTED</h1>
             <p>Dear <b>${recipientData.name}</b>,</p>
             <p>This email confirms that the following documents have been routed to your custody:</p>
-            
+
             <div style="background-color:#f8f9fa; padding:10px; margin-bottom:15px; border-left:4px solid #1C2790;">
               <strong>Log ID:</strong> ${logID}<br>
               <strong>Remarks:</strong> ${docsList[0].Remarks || "N/A"}
@@ -56,11 +44,12 @@ function sendRoutedEmail(recipientData, docsList, signatureBlob, logID, timestam
 
             <div style="margin-top:30px;border:1px solid #eee;padding:20px;text-align:center;">
               <p style="font-weight:bold; color:#555;">RECEIVED BY</p>
-              <div style="display:inline-block;padding:5px;border:1px dashed #ccc;">
-                ${signatureHtml}
-              </div>
-              <p style="margin-top:10px; font-weight:bold;">${recipientData.name}</p>
+              <p style="margin:8px 0; font-size:18px; font-weight:bold; color:#1C2790;">${recipientData.name}</p>
               <p style="font-size:12px; color:#777;">Date: ${formattedTimestamp}</p>
+            </div>
+
+            <div style="margin-top:20px;padding:15px 20px;background-color:#fff9db;border:1px solid #ffeeba;color:#856404;font-size:13px;border-radius:4px;">
+              <b>No reply needed.</b> If the document(s) above are <u>not</u> in your custody, please reply to this email to dispute it. Otherwise, no action is required &mdash; this serves as your confirmation that these documents have been handed over to you.
             </div>
           </div>
           <div style="background-color: #eeeeee; padding: 20px; text-align: center; color: #888;">
@@ -73,10 +62,9 @@ function sendRoutedEmail(recipientData, docsList, signatureBlob, logID, timestam
       to: recipientData.email,
       subject: subject,
       htmlBody: html,
-      name: 'Finance - Internal Routing',
-      inlineImages: inlineImagesObj // Use the safe object
+      name: 'Finance - Internal Routing'
     });
-    
+
     console.log(`Email sent successfully to ${recipientData.email}`);
 
   } catch (e) {
@@ -267,19 +255,9 @@ function processInternalHandover(data) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const docSheet = ss.getSheetByName("InternalDocuments");
-    
+
     // Determine if this is a "Return to Finance" action
     const isReturn = (data.recipientName === "Finance");
-    
-    let fileUrl = "";
-    // Only process signature if NOT returning to Finance
-    if (!isReturn && data.signature) {
-        const folder = DriveApp.getFoldersByName('DMS Signatures').hasNext() ? DriveApp.getFoldersByName('DMS Signatures').next() : DriveApp.createFolder('DMS Signatures');
-        const imageData = data.signature.split(',')[1];
-        const blob = Utilities.newBlob(Utilities.base64Decode(imageData), 'image/png', `${data.logID}-Handover.png`);
-        const file = folder.createFile(blob);
-        fileUrl = file.getUrl();
-    }
 
     const timestamp = new Date();
     const affectedDocs = [];
@@ -288,7 +266,7 @@ function processInternalHandover(data) {
     // Update Rows
     data.docRows.forEach(rowIndex => {
       const row = parseInt(rowIndex);
-      
+
       // Capture previous owner before updating (for return notification)
       if (isReturn && !previousOwnerName) {
          previousOwnerName = docSheet.getRange(row, 5).getValue();
@@ -301,13 +279,12 @@ function processInternalHandover(data) {
 
       docSheet.getRange(row, 4).setValue(newStatus);
       docSheet.getRange(row, 5).setValue(newCustody);
-      
+
       const currentHist = docSheet.getRange(row, 6).getValue();
       const actionText = isReturn ? "Returned to Finance" : `Passed to ${data.recipientName}`;
       const newHist = `${currentHist}\n[${timestamp.toLocaleString()}] ${actionText} (${data.remarks})`;
-      
+
       docSheet.getRange(row, 6).setValue(newHist);
-      if(fileUrl) docSheet.getRange(row, 7).setValue(fileUrl);
 
       affectedDocs.push({
         Title: docSheet.getRange(row, 2).getValue(),
@@ -318,12 +295,12 @@ function processInternalHandover(data) {
 
     // --- NOTIFICATION LOGIC ---
     const directory = getDirectory();
-    
+
     if (isReturn) {
        // Notify the person who returned it (Previous Owner)
        const targetName = String(previousOwnerName).trim().toLowerCase();
        const prevOwnerObj = directory.find(d => String(d.name).trim().toLowerCase() === targetName);
-       
+
        if (prevOwnerObj && prevOwnerObj.email) {
           sendFinanceReceivedEmail(
              { name: previousOwnerName, email: prevOwnerObj.email },
@@ -333,22 +310,14 @@ function processInternalHandover(data) {
           );
        }
     } else {
-       // Standard Handover Notification (with Signature)
+       // Standard Handover Notification (signature-free; silence = confirmation).
        const targetName = String(data.recipientName).trim().toLowerCase();
        const recipientObj = directory.find(d => String(d.name).trim().toLowerCase() === targetName);
-       
-       if (recipientObj && recipientObj.email) {
-          // Re-fetch blob for email if it exists
-          let blob = null;
-          if (data.signature) {
-             const imageData = data.signature.split(',')[1];
-             blob = Utilities.newBlob(Utilities.base64Decode(imageData), 'image/png', 'sig.png');
-          }
 
+       if (recipientObj && recipientObj.email) {
           sendRoutedEmail(
             { name: data.recipientName, email: recipientObj.email },
-            affectedDocs, 
-            blob,
+            affectedDocs,
             data.logID,
             timestamp
           );

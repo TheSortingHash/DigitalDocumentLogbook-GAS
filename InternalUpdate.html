@@ -3,7 +3,6 @@
   <head>
     <base target="_top">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <style>
       /* --- Styles from Update.html --- */
       body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; }
@@ -20,8 +19,6 @@
       
       .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
       .modal-content { background-color: #fff; margin: 10% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; }
-      .signature-pad-container { width: 100%; height: 180px; border: 2px dashed #ccc; margin-bottom: 10px; }
-      canvas { width: 100%; height: 100%; }
 
       /* Autocomplete */
       .autocomplete-items { position: absolute; border: 1px solid #d4d4d4; background: #fff; z-index: 99; width: 100%; }
@@ -73,12 +70,8 @@
             <textarea id="remarks" rows="2"></textarea>
         </div>
 
-        <div id="sigSection">
-            <p>Recipient Signature:</p>
-            <div class="signature-pad-container"><canvas id="sig-pad"></canvas></div>
-            <button onclick="sigPad.clear()" style="padding:10px; margin-right:5px;">Clear</button>
-        </div>
-        
+        <p id="sigSection" style="font-size:13px;color:#666;margin:8px 0 0;">No signature required. A confirmation email will be sent to the recipient &mdash; they only need to reply if they dispute custody.</p>
+
         <div style="text-align:right; margin-top:10px;">
             <button class="btn-confirm" onclick="submitHandover()">Confirm Transfer</button>
         </div>
@@ -89,22 +82,16 @@
       const logId = "<?= logId ?>";
       const details = <?!= JSON.stringify(details) ?>; 
       const directory = <?!= JSON.stringify(directory) ?>;
-      let sigPad;
       let isReturnMode = false;
 
       window.onload = function() {
          if(!details) return document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px;'>Log ID Not Found</h2>";
-         
+
          document.getElementById('dispLogId').innerText = details.header.LogID;
          document.getElementById('dispDate').innerText = new Date(details.header.Timestamp).toLocaleString();
          document.getElementById('dispEncoder').innerText = details.header.Encoder;
-         
+
          renderTable();
-         
-         const canvas = document.getElementById('sig-pad');
-         function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
-         window.onresize = resizeCanvas; resizeCanvas();
-         sigPad = new SignaturePad(canvas);
 
          attachAutocomplete(document.getElementById('recipientName'));
       };
@@ -150,7 +137,6 @@
          } else {
              document.getElementById('recipientGroup').style.display = 'block';
              document.getElementById('sigSection').style.display = 'block';
-             sigPad.clear();
              document.getElementById('recipientName').value = "";
          }
 
@@ -159,11 +145,8 @@
 
       function submitHandover() {
          const name = document.getElementById('recipientName').value;
-         
-         if(!isReturnMode) {
-             if(sigPad.isEmpty()) return alert("Signature required.");
-             if(!name) return alert("Recipient name required.");
-         }
+
+         if(!isReturnMode && !name) return alert("Recipient name required.");
 
          const btn = event.target; btn.disabled = true; btn.innerText = "Processing...";
 
@@ -171,8 +154,7 @@
              logID: logId,
              docRows: JSON.parse(document.getElementById('targetRows').value),
              recipientName: name,
-             remarks: document.getElementById('remarks').value,
-             signature: isReturnMode ? "" : sigPad.toDataURL()
+             remarks: document.getElementById('remarks').value
          };
 
          google.script.run.withSuccessHandler(() => {
